@@ -17,7 +17,7 @@ class QueryTree:
         """
         self.type = type
         self.val = val
-        self.childs = childs
+        self.childs = childs if childs is not None else []
         self.parent = parent
 
     def add_child(self, child: 'QueryTree'):
