@@ -1,0 +1,1 @@
+# aturan-aturan yang ada di spek

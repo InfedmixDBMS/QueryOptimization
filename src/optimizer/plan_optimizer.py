@@ -1,0 +1,1 @@
+# buat update aturan optimisasi ke querytree
