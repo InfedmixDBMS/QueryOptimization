@@ -40,6 +40,8 @@ class QueryTree:
             condition_str = self.condition_node_to_string(self.val)
         else:
             condition_str = self.val
+        if isinstance(condition_str, list):
+            condition_str = ", ".join(condition_str)
         print(f"{indent}{self.type}: {condition_str}")
         for child in self.childs:
             child.print_tree(level + 1)

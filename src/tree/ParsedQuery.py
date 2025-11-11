@@ -24,8 +24,9 @@ class ParsedQuery:
         Collect table names from the query tree
         """
         if node.type == "TABLE":
-            if node.val not in self.tables:
-                self.tables.append(node.val)
+            table_name = node.val
+            if table_name not in self.tables:
+                self.tables.append(table_name)
         for child in node.childs:
             self.collect_tables(child)
 
