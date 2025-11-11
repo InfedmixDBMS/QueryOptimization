@@ -7,7 +7,9 @@ This package implements the Query Optimizer component responsible for:
 - Calculating query execution costs
 """
 
-from .query_models import ParsedQuery, QueryTree
+from .ParsedQuery import ParsedQuery
+from .QueryTree import QueryTree
+from .Nodes import NodeType, ConditionNode, ConditionLeaf, ConditionOperator
 from .optimization_engine import OptimizationEngine
 from .cost_calculator import get_cost
 
