@@ -1,11 +1,9 @@
 """
 ParsedQuery Module - Represents a fully parsed SQL query
-
 """
 
 from typing import List, Optional
 from .QueryTree import QueryTree
-
 
 class ParsedQuery:
     """
