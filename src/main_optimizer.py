@@ -14,7 +14,7 @@ class QueryOptimizer:
 
 def main():
     optimizer = QueryOptimizer()
-    parsed_query = optimizer.parse_query("SELECT p.payment_id FROM payment p WHERE p.value < 1000")
+    parsed_query = optimizer.parse_query("SELECT s.name, d.nama FROM student s JOIN dept d ON s.dept_id = d.id JOIN apt a ON a.id = s.dept_id WHERE s.age > 20 AND d.size >= 10 AND a.name = 'bebek'")
     print("Parsed Query:")
     print(f"Original query: {parsed_query.query}")
     print(f"Tables: {parsed_query.tables}")
