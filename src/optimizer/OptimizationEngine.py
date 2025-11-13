@@ -1,4 +1,4 @@
-from parser import parse_query
+from ..parser.parser import parse_query
 # from plan_optimizer import optimize_tree
 # from cost_estimator import estimate_cost
 
