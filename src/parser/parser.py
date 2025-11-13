@@ -4,54 +4,61 @@ from ..tree.ParsedQuery import ParsedQuery
 from .lexer import tokenize, KEYWORDS
 import re
 
-def split_conditions(node: QueryTree):
-    if node.type == NodeType.SELECT.value and isinstance(node.val, ConditionOperator):
-        if node.val.operator == "AND":
-            left = QueryTree(NodeType.SELECT.value, node.val.left, node.childs, node.parent)
-            right = QueryTree(NodeType.SELECT.value, node.val.right, [left], node.parent)
-            return right  
-    return node
-
-def parse_condition(condition_tokens, alias_map):
+def parse_condition(condition_tokens):
+    """Parse condition tokens into a ConditionNode tree"""
     if not condition_tokens:
         return None
     
-    condition_str = " ".join(condition_tokens)
-    for alias, table in alias_map.items():
-        condition_str = re.sub(rf'\b{alias}\.', f"{table}.", condition_str)
+    # hilangin kurung luar
+    while (len(condition_tokens) > 2 and 
+           condition_tokens[0] == '(' and 
+           condition_tokens[-1] == ')'):
+        condition_tokens = condition_tokens[1:-1]
     
-    if "AND" in condition_tokens:
-        and_idx = condition_tokens.index("AND")
-        left_tokens = condition_tokens[:and_idx]
-        right_tokens = condition_tokens[and_idx + 1:]
-        
-        left_condition = parse_condition(left_tokens, alias_map)
-        right_condition = parse_condition(right_tokens, alias_map)
-        
-        if left_condition and right_condition:
-            return ConditionOperator("AND", left_condition, right_condition)
+    paren_depth = 0
+    or_positions = []
+    and_positions = []
     
-    elif "OR" in condition_tokens:
-        or_idx = condition_tokens.index("OR")
-        left_tokens = condition_tokens[:or_idx]
-        right_tokens = condition_tokens[or_idx + 1:]
+    for i, token in enumerate(condition_tokens):
+        if token == '(':
+            paren_depth += 1
+        elif token == ')':
+            paren_depth -= 1
+        elif paren_depth == 0:  
+            if token == 'OR':
+                or_positions.append(i)
+            elif token == 'AND':
+                and_positions.append(i)
+    
+    # Proses OR
+    if or_positions:
+        split_idx = or_positions[0]  
+        left_tokens = condition_tokens[:split_idx]
+        right_tokens = condition_tokens[split_idx + 1:]
         
-        left_condition = parse_condition(left_tokens, alias_map)
-        right_condition = parse_condition(right_tokens, alias_map)
+        left_condition = parse_condition(left_tokens)
+        right_condition = parse_condition(right_tokens)
         
         if left_condition and right_condition:
             return ConditionOperator("OR", left_condition, right_condition)
     
-    else:
-        cond = " ".join(condition_tokens)
-        for alias, table in alias_map.items():
-            cond = re.sub(rf'\b{alias}\.', f"{table}.", cond)
-        return ConditionLeaf(cond)
+    # Proses AND
+    elif and_positions:
+        split_idx = and_positions[0] 
+        left_tokens = condition_tokens[:split_idx]
+        right_tokens = condition_tokens[split_idx + 1:]
+        
+        left_condition = parse_condition(left_tokens)
+        right_condition = parse_condition(right_tokens)
+        
+        if left_condition and right_condition:
+            return ConditionOperator("AND", left_condition, right_condition)
     
+    # Base
+    condition_str = " ".join(condition_tokens)
     return ConditionLeaf(condition_str)
 
 def parse_query(query: str) -> ParsedQuery:
-    alias_map = {}
     tokens = tokenize(query)
     if "SELECT" not in tokens or "FROM" not in tokens:
         raise ValueError("Invalid query syntax")
@@ -59,50 +66,68 @@ def parse_query(query: str) -> ParsedQuery:
     select_idx = tokens.index("SELECT")
     from_idx = tokens.index("FROM")
     where_idx = tokens.index("WHERE") if "WHERE" in tokens else len(tokens)
+    group_idx = tokens.index("GROUP") if "GROUP" in tokens else len(tokens)
+    having_idx = tokens.index("HAVING") if "HAVING" in tokens else len(tokens)
+    order_idx = tokens.index("ORDER") if "ORDER" in tokens else len(tokens)
 
-    # SELECT
+    clause_ends = sorted([where_idx, group_idx, having_idx, order_idx, len(tokens)])
+    
+    where_end = min([idx for idx in clause_ends if idx > where_idx], default=len(tokens))
+    group_end = min([idx for idx in clause_ends if idx > group_idx], default=len(tokens))
+    having_end = min([idx for idx in clause_ends if idx > having_idx], default=len(tokens))
+    order_end = len(tokens) 
+
+    # Parse SELECT 
     select_tokens = tokens[select_idx + 1: from_idx]
-    raw_select_attrs = []
+    select_attrs = []
     current_attr = []
-    for token in select_tokens:
+    i = 0
+    
+    while i < len(select_tokens):
+        token = select_tokens[i]
         if token == ',':
             if current_attr:
-                raw_select_attrs.append('.'.join(current_attr) if len(current_attr) > 1 else current_attr[0])
+                select_attrs.append(' '.join(current_attr))
                 current_attr = []
+        elif token == 'AS':
+            # Handle "column AS alias"
+            if i + 1 < len(select_tokens) and select_tokens[i + 1] != ',':
+                current_attr.append('AS')
+                current_attr.append(select_tokens[i + 1])
+                i += 1  
         else:
             current_attr.append(token)
-    if current_attr:
-        raw_select_attrs.append('.'.join(current_attr) if len(current_attr) > 1 else current_attr[0])
+        i += 1
     
-    select_attrs = []
-    for attr in raw_select_attrs:
-        for alias, table in alias_map.items():
-            attr = re.sub(rf'^{alias}\.', f'{table}.', attr)
-        select_attrs.append(attr)
+    if current_attr:
+        select_attrs.append(' '.join(current_attr))
 
-    # FROM dengan JOINs
+    # Parse FROM
     from_tokens = tokens[from_idx + 1: where_idx]
     
-    # CARI JOIN
+    # Filter INNER, LEFT, RIGHT, OUTER 
+    filtered_from_tokens = [t for t in from_tokens if t not in ['INNER', 'LEFT', 'RIGHT', 'OUTER']]
+    
+    # Find JOIN
     join_positions = []
-    for i, token in enumerate(from_tokens):
+    for i, token in enumerate(filtered_from_tokens):
         if token == "JOIN":
             join_positions.append(i)
     
     if not join_positions:
-        # Simple FROM tanpa JOIN
+        # Simple FROM 
         tables = []
         i = 0
-        while i < len(from_tokens):
-            if from_tokens[i] == ',':
+        while i < len(filtered_from_tokens):
+            if filtered_from_tokens[i] == ',':
                 i += 1
                 continue
             
-            table_name = from_tokens[i]
-            if (i + 1 < len(from_tokens) and 
-                from_tokens[i + 1] != ',' and 
-                from_tokens[i + 1].upper() not in KEYWORDS):
-                alias = from_tokens[i + 1]
+            table_name = filtered_from_tokens[i]
+            if (i + 1 < len(filtered_from_tokens) and 
+                filtered_from_tokens[i + 1] != ',' and 
+                filtered_from_tokens[i + 1].upper() not in KEYWORDS):
+                alias = filtered_from_tokens[i + 1]
                 tables.append((table_name, alias))
                 i += 2
             else:
@@ -112,43 +137,34 @@ def parse_query(query: str) -> ParsedQuery:
         table_nodes = []
         for table_name, alias in tables:
             table_nodes.append(QueryTree(NodeType.TABLE.value, table_name, [], None))
-            if alias:
-                alias_map[alias] = table_name
-        
     else:
         # Handle JOINs
         table_nodes = []
         
-        # Parse tabel pertama
-        first_table_tokens = from_tokens[:join_positions[0]]
+        first_table_tokens = filtered_from_tokens[:join_positions[0]]
         if len(first_table_tokens) >= 1:
             table_name = first_table_tokens[0]
             alias = first_table_tokens[1] if len(first_table_tokens) > 1 and first_table_tokens[1].upper() not in KEYWORDS else None
-            first_table = QueryTree(NodeType.TABLE.value, table_name, [], None)
+            current_node = QueryTree(NodeType.TABLE.value, table_name, [], None)
             
-            # Bikin JOIN tree
-            current_node = first_table
             for i, join_pos in enumerate(join_positions):
                 if i + 1 < len(join_positions):
                     end_pos = join_positions[i + 1]
                 else:
-                    end_pos = len(from_tokens)
+                    end_pos = len(filtered_from_tokens)
                 
-                join_tokens = from_tokens[join_pos:end_pos]
+                join_tokens = filtered_from_tokens[join_pos:end_pos]
                 
-                # Parse JOIN: JOIN table alias ON condition
                 if len(join_tokens) >= 2 and "ON" in join_tokens:
                     on_idx = join_tokens.index("ON")
                     
-                    # Extract table info (antara JOIN and ON)
                     table_tokens = join_tokens[1:on_idx]
                     join_table_name = table_tokens[0]
                     join_alias = table_tokens[1] if len(table_tokens) > 1 and table_tokens[1].upper() not in KEYWORDS else None
                     
-                    # Extract join condition (after ON)
                     condition_tokens = join_tokens[on_idx + 1:]
-                    join_condition = parse_condition(condition_tokens, alias_map)
-            
+                    join_condition = parse_condition(condition_tokens)
+                    
                     join_table = QueryTree(NodeType.TABLE.value, join_table_name, [], None)
                     join_node = QueryTree(NodeType.JOIN.value, join_condition, [], None)
                     join_node.add_child(current_node)
@@ -158,23 +174,55 @@ def parse_query(query: str) -> ParsedQuery:
             
             table_nodes = [current_node]
 
+    # Buat tree
+    current_tree = table_nodes[0] if table_nodes else None
+
+    # WHERE 
+    if where_idx < len(tokens) and where_end > where_idx + 1:
+        condition_tokens = tokens[where_idx + 1: where_end]
+        where_condition = parse_condition(condition_tokens)
+        where_node = QueryTree(NodeType.SELECT.value, where_condition, [], None)
+        where_node.add_child(current_tree)
+        current_tree = where_node
+
+    # GROUP BY 
+    if group_idx < len(tokens) and group_end > group_idx + 1:
+        group_tokens = tokens[group_idx + 2: group_end] 
+        group_attrs = [t for t in group_tokens if t != ',']
+        group_node = QueryTree(NodeType.GROUP_BY.value, group_attrs, [], None)
+        group_node.add_child(current_tree)
+        current_tree = group_node
+
+    # HAVING 
+    if having_idx < len(tokens) and having_end > having_idx + 1:
+        having_tokens = tokens[having_idx + 1: having_end]
+        having_condition = parse_condition(having_tokens)
+        having_node = QueryTree(NodeType.HAVING.value, having_condition, [], None)
+        having_node.add_child(current_tree)
+        current_tree = having_node
+
+    # ORDER BY 
+    if order_idx < len(tokens):
+        order_tokens = tokens[order_idx + 2: order_end]  
+        order_attrs = []
+        current_order = []
+        for token in order_tokens:
+            if token == ',':
+                if current_order:
+                    order_attrs.append(' '.join(current_order))
+                    current_order = []
+            else:
+                current_order.append(token)
+        if current_order:
+            order_attrs.append(' '.join(current_order))
+        
+        order_node = QueryTree(NodeType.ORDER_BY.value, order_attrs, [], None)
+        order_node.add_child(current_tree)
+        current_tree = order_node
+
     # PROJECT
     root = QueryTree(NodeType.PROJECT.value, select_attrs, [], None)
-
-    # WHERE
-    if where_idx < len(tokens):
-        condition_tokens = tokens[where_idx + 1:]
-        where_condition = parse_condition(condition_tokens, alias_map)
-        where_node = QueryTree(NodeType.SELECT.value, where_condition, [], None)
-        
-        for tnode in table_nodes:
-            where_node.add_child(tnode)
-        root.add_child(where_node)
-    else:
-        # GAda WHERE
-        for tnode in table_nodes:
-            root.add_child(tnode)
+    root.add_child(current_tree)
 
     parsed = ParsedQuery(query, root)
-    parsed.alias_map = alias_map
     return parsed

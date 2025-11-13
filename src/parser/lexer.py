@@ -1,6 +1,6 @@
 import re
 
-KEYWORDS = {"SELECT", "FROM", "WHERE", "JOIN", "ON", "AND", "OR", "ORDER", "BY", "INNER", "LEFT", "RIGHT", "OUTER"}
+KEYWORDS = {"SELECT", "FROM", "WHERE", "JOIN", "ON", "AND", "OR", "ORDER", "BY", "INNER", "LEFT", "RIGHT", "OUTER", "AS", "GROUP", "HAVING"}
 
 def tokenize(query: str):
     query = query.strip()

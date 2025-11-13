@@ -18,6 +18,8 @@ class NodeType(Enum):
     UPDATE = "UPDATE"
     SET = "SET"
     ORDER_BY = "ORDER-BY"
+    GROUP_BY = "GROUP-BY"
+    HAVING = "HAVING"
     LIMIT = "LIMIT"
     CONDITION = "CONDITION"
 
