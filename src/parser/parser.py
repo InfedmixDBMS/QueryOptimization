@@ -4,7 +4,6 @@ from ..tree.parsed_query import ParsedQuery
 from .lexer import Lexer, KEYWORDS
 
 class Parser:
-
     def __init__(self):
         self.lexer = Lexer()
 
