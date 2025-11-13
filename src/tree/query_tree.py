@@ -11,7 +11,8 @@ class QueryTree:
     Represents a node in a query tree structure
     """
 
-    def __init__(self, type: str, val, childs: List['QueryTree'], parent: Optional['QueryTree']):
+    def __init__(self, type: str, val, childs: List['QueryTree'],
+                 parent: Optional['QueryTree']):
         """
         Initialize a QueryTree node
         """

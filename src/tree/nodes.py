@@ -3,7 +3,7 @@ Nodes Module - Defines all node types and data structures for query trees
 """
 
 from enum import Enum
-from typing import List, Optional, Union
+from typing import Union
 
 
 class NodeType(Enum):
@@ -37,7 +37,8 @@ class ConditionOperator(ConditionNode):
     Represents a logical operator (AND, OR) between conditions
     """
 
-    def __init__(self, operator: str, left: ConditionNode, right: ConditionNode):
+    def __init__(self, operator: str, left: 'ConditionNode',
+                 right: 'ConditionNode'):
         self.operator = operator
         self.left = left
         self.right = right

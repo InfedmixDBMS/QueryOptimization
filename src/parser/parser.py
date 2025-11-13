@@ -2,16 +2,16 @@ from ..tree.QueryTree import QueryTree
 from ..tree.Nodes import NodeType, ConditionLeaf, ConditionOperator
 from ..tree.ParsedQuery import ParsedQuery
 from .lexer import tokenize, KEYWORDS
-import re
+
 
 def parse_condition(condition_tokens):
     """Parse condition tokens into a ConditionNode tree"""
     if not condition_tokens:
         return None
-    
-    # hilangin kurung luar
-    while (len(condition_tokens) > 2 and 
-           condition_tokens[0] == '(' and 
+
+    # Remove outer parentheses
+    while (len(condition_tokens) > 2 and
+           condition_tokens[0] == '(' and
            condition_tokens[-1] == ')'):
         condition_tokens = condition_tokens[1:-1]
     
@@ -29,36 +29,38 @@ def parse_condition(condition_tokens):
                 or_positions.append(i)
             elif token == 'AND':
                 and_positions.append(i)
-    
-    # Proses OR
+
+    # Process OR operators
     if or_positions:
-        split_idx = or_positions[0]  
+        split_idx = or_positions[0]
         left_tokens = condition_tokens[:split_idx]
         right_tokens = condition_tokens[split_idx + 1:]
-        
+
         left_condition = parse_condition(left_tokens)
         right_condition = parse_condition(right_tokens)
-        
+
         if left_condition and right_condition:
             return ConditionOperator("OR", left_condition, right_condition)
-    
-    # Proses AND
+
+    # Process AND operators
     elif and_positions:
-        split_idx = and_positions[0] 
+        split_idx = and_positions[0]
         left_tokens = condition_tokens[:split_idx]
         right_tokens = condition_tokens[split_idx + 1:]
-        
+
         left_condition = parse_condition(left_tokens)
         right_condition = parse_condition(right_tokens)
-        
+
         if left_condition and right_condition:
             return ConditionOperator("AND", left_condition, right_condition)
-    
-    # Base
+
+    # Base case: single condition
     condition_str = " ".join(condition_tokens)
     return ConditionLeaf(condition_str)
 
+
 def parse_query(query: str) -> ParsedQuery:
+    """Parse SQL query string into ParsedQuery object"""
     tokens = tokenize(query)
     if "SELECT" not in tokens or "FROM" not in tokens:
         raise ValueError("Invalid query syntax")
@@ -70,19 +72,23 @@ def parse_query(query: str) -> ParsedQuery:
     having_idx = tokens.index("HAVING") if "HAVING" in tokens else len(tokens)
     order_idx = tokens.index("ORDER") if "ORDER" in tokens else len(tokens)
 
-    clause_ends = sorted([where_idx, group_idx, having_idx, order_idx, len(tokens)])
-    
-    where_end = min([idx for idx in clause_ends if idx > where_idx], default=len(tokens))
-    group_end = min([idx for idx in clause_ends if idx > group_idx], default=len(tokens))
-    having_end = min([idx for idx in clause_ends if idx > having_idx], default=len(tokens))
-    order_end = len(tokens) 
+    clause_ends = sorted([where_idx, group_idx, having_idx, order_idx,
+                          len(tokens)])
 
-    # Parse SELECT 
+    where_end = min([idx for idx in clause_ends if idx > where_idx],
+                    default=len(tokens))
+    group_end = min([idx for idx in clause_ends if idx > group_idx],
+                    default=len(tokens))
+    having_end = min([idx for idx in clause_ends if idx > having_idx],
+                     default=len(tokens))
+    order_end = len(tokens)
+
+    # Parse SELECT clause
     select_tokens = tokens[select_idx + 1: from_idx]
     select_attrs = []
     current_attr = []
     i = 0
-    
+
     while i < len(select_tokens):
         token = select_tokens[i]
         if token == ',':
@@ -94,28 +100,29 @@ def parse_query(query: str) -> ParsedQuery:
             if i + 1 < len(select_tokens) and select_tokens[i + 1] != ',':
                 current_attr.append('AS')
                 current_attr.append(select_tokens[i + 1])
-                i += 1  
+                i += 1
         else:
             current_attr.append(token)
         i += 1
-    
+
     if current_attr:
         select_attrs.append(' '.join(current_attr))
 
-    # Parse FROM
+    # Parse FROM clause
     from_tokens = tokens[from_idx + 1: where_idx]
-    
-    # Filter INNER, LEFT, RIGHT, OUTER 
-    filtered_from_tokens = [t for t in from_tokens if t not in ['INNER', 'LEFT', 'RIGHT', 'OUTER']]
-    
-    # Find JOIN
+
+    # Filter out JOIN type keywords
+    filtered_from_tokens = [t for t in from_tokens
+                            if t not in ['INNER', 'LEFT', 'RIGHT', 'OUTER']]
+
+    # Find JOIN positions
     join_positions = []
     for i, token in enumerate(filtered_from_tokens):
         if token == "JOIN":
             join_positions.append(i)
     
     if not join_positions:
-        # Simple FROM 
+        # Simple FROM clause without JOINs
         tables = []
         i = 0
         while i < len(filtered_from_tokens):
@@ -124,9 +131,9 @@ def parse_query(query: str) -> ParsedQuery:
                 continue
             
             table_name = filtered_from_tokens[i]
-            if (i + 1 < len(filtered_from_tokens) and 
-                filtered_from_tokens[i + 1] != ',' and 
-                filtered_from_tokens[i + 1].upper() not in KEYWORDS):
+            if (i + 1 < len(filtered_from_tokens) and
+                    filtered_from_tokens[i + 1] != ',' and
+                    filtered_from_tokens[i + 1].upper() not in KEYWORDS):
                 alias = filtered_from_tokens[i + 1]
                 tables.append((table_name, alias))
                 i += 2
@@ -136,7 +143,8 @@ def parse_query(query: str) -> ParsedQuery:
         
         table_nodes = []
         for table_name, alias in tables:
-            table_nodes.append(QueryTree(NodeType.TABLE.value, table_name, [], None))
+            table_nodes.append(QueryTree(NodeType.TABLE.value, table_name,
+                                         [], None))
     else:
         # Handle JOINs
         table_nodes = []

@@ -1,5 +1,23 @@
 @startuml Query Optimizer Class Diagram
 
+title Query Optimizer - Class Diagram
+note as FileStructure
+  **File Structure (PEP 8 Compliant)**
+  src/
+  ├── optimizer/
+  │   ├── optimization_engine.py
+  │   ├── plan_optimizer.py
+  │   ├── cost_calculator.py
+  │   └── rules.py
+  ├── parser/
+  │   ├── parser.py
+  │   └── lexer.py
+  └── tree/
+      ├── nodes.py
+      ├── query_tree.py
+      └── parsed_query.py
+end note
+
 ' Komponen utama interface
 package "Query Optimizer" {
     class OptimizationEngine {
@@ -89,24 +107,29 @@ package "Komponen Parser" {
 ' Komponen optimizer
 package "Komponen Optimisasi" {
     class PlanOptimizer {
+        - rules: OptimizationRules
+        + __init__(): void
         + optimize_tree(tree: QueryTree): QueryTree
         + apply_rules(tree: QueryTree): QueryTree
     }
 
     class CostCalculator {
+        - statistics: Statistic
+        + __init__(statistics: Statistic): void
         + get_cost(parsed_query: ParsedQuery): int
         + calculate_node_cost(node: QueryTree): int
+        - _calculate_tree_cost(tree: QueryTree): int
     }
 
     class OptimizationRules {
-        + push_down_selection(tree: QueryTree): QueryTree
-        + push_down_projection(tree: QueryTree): QueryTree
-        + combine_selections(tree: QueryTree): QueryTree
-        + combine_cartesian_with_selection(tree: QueryTree): QueryTree
-        + reorder_joins(tree: QueryTree): QueryTree
-        + apply_associativity(tree: QueryTree): QueryTree
-        + distribute_selection_over_join(tree: QueryTree): QueryTree
-        + distribute_projection_over_join(tree: QueryTree): QueryTree
+        + {static} push_down_selection(tree: QueryTree): QueryTree
+        + {static} push_down_projection(tree: QueryTree): QueryTree
+        + {static} combine_selections(tree: QueryTree): QueryTree
+        + {static} combine_cartesian_with_selection(tree: QueryTree): QueryTree
+        + {static} reorder_joins(tree: QueryTree): QueryTree
+        + {static} apply_associativity(tree: QueryTree): QueryTree
+        + {static} distribute_selection_over_join(tree: QueryTree): QueryTree
+        + {static} distribute_projection_over_join(tree: QueryTree): QueryTree
     }
 }
 
@@ -140,9 +163,9 @@ ConditionNode <|-- ConditionOperator
 ConditionNode <|-- ConditionLeaf
 ConditionOperator o-- ConditionNode : kiri/kanan
 
-PlanOptimizer ..> OptimizationRules : menggunakan
+PlanOptimizer *-- OptimizationRules : memiliki
 PlanOptimizer ..> QueryTree : memanipulasi
-CostCalculator ..> Statistic : menggunakan
+CostCalculator o-- Statistic : dapat memiliki
 CostCalculator ..> QueryTree : menganalisis
 
 ' Catatan

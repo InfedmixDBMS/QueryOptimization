@@ -2,8 +2,9 @@
 ParsedQuery Module - Represents a fully parsed SQL query
 """
 
-from typing import List, Optional
-from .QueryTree import QueryTree
+from typing import Optional
+from .query_tree import QueryTree
+
 
 class ParsedQuery:
     """
@@ -13,6 +14,7 @@ class ParsedQuery:
     def __init__(self, query: str, query_tree: QueryTree):
         """
         Initialize a ParsedQuery with SQL string and query tree
+
         """
         self.query_tree = query_tree
         self.query = query
