@@ -10,7 +10,7 @@ KEYWORDS = {
 }
 
 class Lexer:
-    def tokenize(query: str):
+    def tokenize(self, query: str):
         """
         Tokenize a SQL query string into tokens
         """
