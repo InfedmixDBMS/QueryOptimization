@@ -3,7 +3,7 @@ QueryTree Module - Core tree structure for representing parsed SQL queries
 """
 
 from typing import List, Optional
-from .Nodes import NodeType, ConditionNode, ConditionLeaf, ConditionOperator
+from .nodes import NodeType, ConditionNode, ConditionLeaf, ConditionOperator
 
 
 class QueryTree:

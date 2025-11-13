@@ -1,6 +1,6 @@
-from ..tree.QueryTree import QueryTree
-from ..tree.Nodes import NodeType, ConditionLeaf, ConditionOperator
-from ..tree.ParsedQuery import ParsedQuery
+from ..tree.query_tree import QueryTree
+from ..tree.nodes import NodeType, ConditionLeaf, ConditionOperator
+from ..tree.parsed_query import ParsedQuery
 from .lexer import tokenize, KEYWORDS
 
 
