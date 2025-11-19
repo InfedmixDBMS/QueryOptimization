@@ -12,7 +12,7 @@ def main():
     optimizer = OptimizationEngine()
 
     # Example complex query with multiple joins and conditions
-    parsed_query = optimizer.parse_query("""
+    query = """
         SELECT
             emp.employee_id,
             emp.name AS employee_name,
@@ -31,13 +31,22 @@ def main():
         ORDER BY
             emp.salary DESC,
             proj.budget DESC
-    """)
+    """
 
-    print("Parsed Query:")
-    print(f"Original query: {parsed_query.query}")
+    print("=== PARSING ===")
+    parsed_query = optimizer.parse_query(query)
     print(f"Tables: {parsed_query.tables}")
-    print("\nQuery Tree:")
+    print("Original Tree:")
     parsed_query.print_tree()
+    
+    print(f"\nOriginal Cost: {optimizer.get_cost(parsed_query)}")
+
+    print("\n=== OPTIMIZATION ===")
+    optimized_query = optimizer.optimize_query(parsed_query)
+    print("Optimized Tree:")
+    optimized_query.print_tree()
+    
+    print(f"\nOptimized Cost: {optimizer.get_cost(optimized_query)}")
 
 
 if __name__ == "__main__":

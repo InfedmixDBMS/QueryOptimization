@@ -3,40 +3,34 @@ Optimization Engine Module - Main interface for query optimization
 """
 
 from ..parser.parser import Parser
-# from .plan_optimizer import optimize_tree
-# from .cost_calculator import get_cost
-
+from ..parser.validator import QueryValidator
+from .plan_optimizer import PlanOptimizer
+from .cost_calculator import CostCalculator
 
 class OptimizationEngine:
-    """
-    Main optimization engine that provides query parsing,
-    optimization, and cost calculation
-    """
-
     def __init__(self):
         """Initialize the optimization engine"""
         self.parser = Parser()
-        self.plan_optimizer = None  # Placeholder 
-        self.cost_calulator = None  # Placeholder 
+        self.validator = QueryValidator()
+        self.plan_optimizer = PlanOptimizer()
+        self.cost_calculator = CostCalculator()
 
     def parse_query(self, query: str):
-        """
-        Parse a SQL query string into a ParsedQuery object
-
-        """
-        return self.parser.parse_query(query)
+        """Parse and validate SQL query string"""
+        # 1. Parse query
+        parsed_query = self.parser.parse_query(query)
+        
+        # 2. Validate parsed query
+        is_valid, errors = self.validator.validate_parsed_query(parsed_query)
+        if not is_valid:
+            raise ValueError(f"Query validation failed: {errors}")
+        
+        return parsed_query
 
     def optimize_query(self, parsed_query):
-        """
-        Optimize a parsed query using optimization rules
-
-        """
-        # TODO: Implement query optimization
-        pass
+        """Optimize parsed query using rules"""
+        return self.plan_optimizer.optimize_tree(parsed_query)
 
     def get_cost(self, parsed_query):
-        """
-        Calculate the execution cost of a parsed query
-        """
-        # TODO: Implement cost calculation
-        pass
+        """Calculate execution cost"""
+        return self.cost_calculator.get_cost(parsed_query)
