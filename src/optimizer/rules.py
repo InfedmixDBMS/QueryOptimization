@@ -24,7 +24,7 @@ class OptimizationRules:
         Push selection operations down the tree closer to base relations
         """
         # TODO: Implement push down selection
-        pass
+        return tree
 
     @staticmethod
     def push_down_projection(tree):
@@ -32,7 +32,7 @@ class OptimizationRules:
         Push projection operations down the tree
         """
         # TODO: Implement push down projection
-        pass
+        return tree
 
     @staticmethod
     def combine_selections(tree):
@@ -40,7 +40,7 @@ class OptimizationRules:
         Combine consecutive selection operations
         """
         # TODO: Implement combine selections
-        pass
+        return tree
 
     @staticmethod
     def combine_cartesian_with_selection(tree):
@@ -48,7 +48,7 @@ class OptimizationRules:
         Combine Cartesian product with selection to form join
         """
         # TODO: Implement cartesian-to-join transformation
-        pass
+        return tree
 
     @staticmethod
     def reorder_joins(tree):
@@ -56,7 +56,7 @@ class OptimizationRules:
         Reorder joins based on commutativity
         """
         # TODO: Implement join reordering
-        pass
+        return tree
 
     @staticmethod
     def apply_associativity(tree):
@@ -65,7 +65,7 @@ class OptimizationRules:
 
         """
         # TODO: Implement join associativity
-        pass
+        return tree
 
     @staticmethod
     def distribute_selection_over_join(tree):
@@ -74,7 +74,7 @@ class OptimizationRules:
 
         """
         # TODO: Implement selection distribution
-        pass
+        return tree
 
     @staticmethod
     def distribute_projection_over_join(tree):
@@ -83,4 +83,4 @@ class OptimizationRules:
 
         """
         # TODO: Implement projection distribution
-        pass
+        return tree
