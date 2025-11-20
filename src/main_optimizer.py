@@ -26,8 +26,7 @@ def main():
         INNER JOIN
             projects proj ON dept.department_id = proj.department_id
         WHERE
-            (emp.salary > 80000 AND emp.experience_years >= 5)
-            OR proj.budget > 1000000
+            (emp.salary > 80000 AND emp.experience_years >= 5) AND proj.budget > 1000000
         ORDER BY
             emp.salary DESC,
             proj.budget DESC
