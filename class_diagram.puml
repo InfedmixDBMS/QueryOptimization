@@ -131,13 +131,13 @@ package "Komponen Optimisasi" {
 
 ' Interface statistik untuk Storage Manager
 package "Interface Storage" {
-    class Statistic {
-        - nr: int
-        - br: int
-        - lr: int
-        - fr: int
-        - V_A_r: int
-        + __init__(...)
+    class Statistics {
+        - relations: Dict[str, Dict]
+        + __init__(): void
+        + add_relation(relation_name: str, nr: int, lr: int, br: int, fr: int): void
+        + add_distinct_values(relation_name: str, attribute: str, count: int): void
+        + get_relation_stats(relation_name: str): Dict
+        + get_distinct_values(relation_name: str, attribute: str): int
     }
 }
 
@@ -176,7 +176,7 @@ PlanOptimizer ..> QueryTree : memanipulasi
 OptimizationRules ..> QueryTree : transformasi
 
 ' CostCalculator dan statistik
-CostCalculator o-- Statistic : dapat memiliki
+CostCalculator o-- Statistics : dapat memiliki
 CostCalculator ..> ParsedQuery : menganalisis
 CostCalculator ..> QueryTree : menghitung
 
@@ -232,13 +232,16 @@ CostCalculator ..> QueryTree : menghitung
 '     dengan logging untuk setiap tahap transformasi.
 ' end note
 
-' note bottom of Statistic
-'     Statistik yang disediakan oleh Storage Manager:
+' note bottom of Statistics
+'     Mengelola statistik relasi untuk perhitungan biaya:
 '     - nr: jumlah tuple dalam relasi r
 '     - br: jumlah blok yang berisi tuple dari r
 '     - lr: ukuran tuple dari r
 '     - fr: blocking factor dari r
 '     - V(A,r): nilai distinct dalam r untuk atribut A
+'
+'     Menyediakan default values untuk relasi tanpa statistik
+'     dan dapat menghitung parameter yang hilang secara otomatis.
 ' end note
 
 ' note left of QueryTree
