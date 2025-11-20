@@ -1,26 +1,16 @@
 @startuml Query Optimizer Class Diagram
 
 title Query Optimizer - Class Diagram
-note as FileStructure
-  **File Structure (PEP 8 Compliant)**
-  src/
-  ├── optimizer/
-  │   ├── optimization_engine.py
-  │   ├── plan_optimizer.py
-  │   ├── cost_calculator.py
-  │   └── rules.py
-  ├── parser/
-  │   ├── parser.py
-  │   └── lexer.py
-  └── tree/
-      ├── nodes.py
-      ├── query_tree.py
-      └── parsed_query.py
-end note
+
 
 ' Komponen utama interface
 package "Query Optimizer" {
     class OptimizationEngine {
+        - parser: Parser
+        - validator: QueryValidator
+        - plan_optimizer: PlanOptimizer
+        - cost_calculator: CostCalculator
+        + __init__(): void
         + parse_query(query: str): ParsedQuery
         + optimize_query(query: ParsedQuery): ParsedQuery
         + get_cost(query: ParsedQuery): int
@@ -94,6 +84,8 @@ package "Komponen Node" {
 ' Komponen parser
 package "Komponen Parser" {
     class Parser {
+        - lexer: Lexer
+        + __init__(): void
         + parse_query(query: str): ParsedQuery
         + parse_condition(condition_tokens: List[str]): ConditionNode
     }
@@ -102,6 +94,11 @@ package "Komponen Parser" {
         + tokenize(query: str): List[str]
         + KEYWORDS: Set[str]
     }
+
+    class QueryValidator {
+        + validate_parsed_query(parsed_query: ParsedQuery): Tuple[bool, List[str]]
+        - _validate_tree_structure(node: QueryTree, visited: Set): List[str]
+    }
 }
 
 ' Komponen optimizer
@@ -109,8 +106,7 @@ package "Komponen Optimisasi" {
     class PlanOptimizer {
         - rules: OptimizationRules
         + __init__(): void
-        + optimize_tree(tree: QueryTree): QueryTree
-        + apply_rules(tree: QueryTree): QueryTree
+        + optimize_tree(parsed_query: ParsedQuery): ParsedQuery
     }
 
     class CostCalculator {
@@ -146,63 +142,126 @@ package "Interface Storage" {
 }
 
 ' Relasi antar kelas
-OptimizationEngine ..> Parser : menggunakan
-OptimizationEngine ..> PlanOptimizer : menggunakan
-OptimizationEngine ..> CostCalculator : menggunakan
+' OptimizationEngine memiliki (composition) semua komponen utama
+OptimizationEngine *-- Parser : memiliki
+OptimizationEngine *-- QueryValidator : memiliki
+OptimizationEngine *-- PlanOptimizer : memiliki
+OptimizationEngine *-- CostCalculator : memiliki
 
-Parser ..> Lexer : menggunakan
+' Parser dan komponennya
+Parser *-- Lexer : memiliki
 Parser ..> ParsedQuery : membuat
 Parser ..> QueryTree : membuat
 Parser ..> ConditionNode : membuat
 
+' QueryValidator memvalidasi hasil parsing
+QueryValidator ..> ParsedQuery : memvalidasi
+QueryValidator ..> QueryTree : memvalidasi
+
+' Struktur tree dan node
 ParsedQuery *-- QueryTree : berisi
 QueryTree --> NodeType : menggunakan
 QueryTree *-- ConditionNode : dapat berisi
 
+' Hierarki ConditionNode
 ConditionNode <|-- ConditionOperator
 ConditionNode <|-- ConditionLeaf
 ConditionOperator o-- ConditionNode : kiri/kanan
 
+' PlanOptimizer dan rules
 PlanOptimizer *-- OptimizationRules : memiliki
+PlanOptimizer ..> ParsedQuery : transformasi
 PlanOptimizer ..> QueryTree : memanipulasi
+
+OptimizationRules ..> QueryTree : transformasi
+
+' CostCalculator dan statistik
 CostCalculator o-- Statistic : dapat memiliki
-CostCalculator ..> QueryTree : menganalisis
+CostCalculator ..> ParsedQuery : menganalisis
+CostCalculator ..> QueryTree : menghitung
 
-' Catatan
-note right of OptimizationEngine
-    Interface utama untuk komponen Query Optimizer.
-    Mengimplementasikan tiga method yang diperlukan dari spesifikasi:
-    1. parse_query - parsing string SQL menjadi ParsedQuery
-    2. optimize_query - optimasi parsed query menggunakan aturan
-    3. get_cost - kalkulasi biaya eksekusi
-end note
 
-note right of OptimizationRules
-    Mengimplementasikan aturan ekivalensi dari spesifikasi:
-    1. Dekomposisi seleksi konjungtif
-    2. Komutativitas seleksi
-    3. Eliminasi proyeksi cascade
-    4. Seleksi dengan Cartesian product = join
-    5. Komutativitas join
-    6. Asosiatifitas join
-    7. Distribusi seleksi terhadap join
-    8. Distribusi proyeksi terhadap join
-end note
+' Additional notes for clarity
+'
+' note right of OptimizationEngine
+'     Interface utama untuk komponen Query Optimizer.
+'     Mengintegrasikan seluruh komponen dalam alur:
+'     Parse → Validate → Optimize → Calculate Cost
 
-note bottom of Statistic
-    Statistik yang disediakan oleh Storage Manager:
-    - nr: jumlah tuple dalam relasi r
-    - br: jumlah blok yang berisi tuple dari r
-    - lr: ukuran tuple dari r
-    - fr: blocking factor dari r
-    - V(A,r): nilai distinct dalam r untuk atribut A
-end note
+'     Method dari spesifikasi:
+'     1. parse_query - parsing & validasi SQL
+'     2. optimize_query - optimasi menggunakan rules
+'     3. get_cost - kalkulasi biaya eksekusi
+' end note
 
-note left of QueryTree
-    Representasi tree dari parsed query.
-    Setiap node memiliki tipe (NodeType) dan nilai.
-    Mendukung operasi seperti PROJECT, SELECT,
-    JOIN, TABLE, ORDER_BY, GROUP_BY, HAVING, dll.
-end note
+' note bottom of QueryValidator
+'     Komponen validasi yang ditambahkan untuk memastikan:
+'     - Query tree memiliki struktur yang valid
+'     - Tidak ada cycle dalam tree
+'     - Semua komponen esensial tersedia
+'     - Setiap node memiliki tipe yang benar
+
+'     Memberikan early detection sebelum optimisasi.
+' end note
+
+' note right of OptimizationRules
+'     Mengimplementasikan 8 aturan transformasi
+'     berdasarkan aturan ekivalensi relasional:
+
+'     1. Push-down selection
+'     2. Push-down projection
+'     3. Combine selections
+'     4. Combine Cartesian with selection (→ join)
+'     5. Reorder joins (commutativity)
+'     6. Apply associativity
+'     7. Distribute selection over join
+'     8. Distribute projection over join
+
+'     Semua method bersifat static untuk transformasi tree.
+' end note
+
+' note left of PlanOptimizer
+'     Orchestrator yang menerapkan aturan optimisasi
+'     secara berurutan mengikuti strategi heuristik:
+
+'     1. Push-down operations
+'     2. Combine & convert operations
+'     3. Join optimization
+
+'     Mengembalikan ParsedQuery yang telah dioptimasi
+'     dengan logging untuk setiap tahap transformasi.
+' end note
+
+' note bottom of Statistic
+'     Statistik yang disediakan oleh Storage Manager:
+'     - nr: jumlah tuple dalam relasi r
+'     - br: jumlah blok yang berisi tuple dari r
+'     - lr: ukuran tuple dari r
+'     - fr: blocking factor dari r
+'     - V(A,r): nilai distinct dalam r untuk atribut A
+' end note
+
+' note left of QueryTree
+'     Representasi tree dari parsed query.
+'     Setiap node memiliki tipe (NodeType) dan nilai.
+'     Mendukung operasi seperti PROJECT, SELECT,
+'     JOIN, TABLE, ORDER_BY, GROUP_BY, HAVING, dll.
+
+'     Tree structure dengan parent-child relationship
+'     memungkinkan traversal dan transformasi.
+' end note
+
+' note bottom of CostCalculator
+'     Menghitung estimasi biaya eksekusi query
+'     menggunakan pendekatan rekursif bottom-up.
+
+'     Formula biaya untuk berbagai operasi:
+'     - TABLE: br (number of blocks)
+'     - SELECT: scan cost + evaluation cost
+'     - JOIN: nested loop / hash / merge join
+'     - PROJECT: child cost + projection cost
+
+'     Menggunakan statistik dari Storage Manager.
+' end note
 
 @enduml
