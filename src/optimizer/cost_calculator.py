@@ -99,9 +99,9 @@ class CostCalculator:
         selectivity = self._estimate_selectivity(condition, tree)
 
         output_cost = child_cost * selectivity
-        total_cost = child_cost + output_cost
+        print(f"    [SELECT DEBUG] Child cost: {child_cost:.2f}, Selectivity: {selectivity:.4f}, Output: {output_cost:.2f}")
 
-        return total_cost
+        return output_cost
 
     def _calculate_project_cost(self, tree):
         if not tree.childs:
@@ -109,6 +109,7 @@ class CostCalculator:
 
         child_cost = self._calculate_tree_cost(tree.childs[0])
         projection_overhead = child_cost * 0.1
+        print(f"    [PROJECT DEBUG] Child cost: {child_cost:.2f}, Overhead: {projection_overhead:.2f}, Total: {child_cost + projection_overhead:.2f}")
 
         return child_cost + projection_overhead
 
@@ -118,11 +119,17 @@ class CostCalculator:
 
         left_cost = self._calculate_tree_cost(tree.childs[0])
         right_cost = self._calculate_tree_cost(tree.childs[1])
+        
+        # DEBUGGING
+        print(f"    [JOIN DEBUG] Left cost: {left_cost:.2f}, Right cost: {right_cost:.2f}")
 
         nested_loop_cost = left_cost * right_cost
         join_overhead = (left_cost + right_cost) * 0.5
+        
+        total = nested_loop_cost + join_overhead
+        print(f"    [JOIN DEBUG] Nested loop: {nested_loop_cost:.2f}, Total: {total:.2f}")
 
-        return nested_loop_cost + join_overhead
+        return total
 
     def _calculate_natural_join_cost(self, tree):
         if len(tree.childs) < 2:
