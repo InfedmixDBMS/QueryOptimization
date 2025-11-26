@@ -30,15 +30,19 @@ class OptimizationRules:
         if tree is None:
             return None
         
-        # Apply recursively to children first (bottom-up)
+        # Rekursif bottom up
         if hasattr(tree, 'childs') and tree.childs:
             for i, child in enumerate(tree.childs):
                 tree.childs[i] = OptimizationRules.push_down_selection(child)
         
         # Process current node
         if tree.type == "SELECT":
+            original = tree
             tree = OptimizationRules._decompose_conjunctive_selection(tree)
-            
+
+            if tree != original:
+                tree = OptimizationRules.push_down_projection(tree) 
+
             # tree = OptimizationRules._push_selection_over_join(tree) -> Ini buat integrate sama rules 7 ya
         
         return tree
@@ -303,7 +307,13 @@ class OptimizationRules:
             # return table name
             attrs.append(tree.val + ".*")
         elif tree.type == "PROJECT":
-            attrs.extend(tree.val if isinstance(tree.val, list) else [tree.val])
+            proj_attrs = tree.val
+            if isinstance(proj_attrs, str):
+                attrs.extend([attr.strip() for attr in proj_attrs.split(',')])
+            elif isinstance(proj_attrs, list):
+                attrs.extend(proj_attrs)
+            else:
+                attrs.append(str(proj_attrs))
         
         # Recursively collect from children
         for child in tree.childs:
@@ -324,7 +334,7 @@ class OptimizationRules:
             cond_str = condition.condition
             # Extract identifiers (words before/after operators)
             import re
-            identifiers = re.findall(r'[A-Za-z_][A-Za-z0-9_.]*', cond_str)
+            identifiers = re.findall(r'[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*', cond_str)
             attrs.extend(identifiers)
         
         elif isinstance(condition, ConditionOperator):
