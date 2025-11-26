@@ -149,7 +149,7 @@ class OptimizationRules:
     @staticmethod
     def _helper_distribute_projection_over_join(tree):
         """
-        Rule 8: Distribute projection over join
+        Rule 8: Distribute projection over join helper
         """
         if tree.type != "PROJECT" or not tree.childs:
             return tree
@@ -162,80 +162,90 @@ class OptimizationRules:
         if len(child.childs) < 2:
             return tree
         
-        project_attrs = tree.val 
+        project_attrs = tree.val
+        if isinstance(project_attrs, str):
+            project_attrs = [attr.strip() for attr in project_attrs.split(',')]
+        elif not isinstance(project_attrs, list):
+            project_attrs = [str(project_attrs)]
+        
         join_condition = child.val
         left_subtree = child.childs[0]
         right_subtree = child.childs[1]
         
-        # Get attributes left and rigth
+        # Get attrs dari each side
         left_attrs = OptimizationRules._get_attributes_from_tree(left_subtree)
         right_attrs = OptimizationRules._get_attributes_from_tree(right_subtree)
         
-        # Get join attributes
+        # Get join attrs
         join_attrs = OptimizationRules._get_attributes_from_condition(join_condition)
         
         # Split project attributes
-        L1 = []  # Attributes left
-        L2 = []  # Attributes right
+        L1 = []  # Attributes from left
+        L2 = []  # Attributes from right
         
         for attr in project_attrs:
-            # Handle "table.attr" atau "attr"
-            attr_name = attr.split('.')[-1] if '.' in attr else attr
-            attr_name = attr_name.split()[0]  # Remove AS 
-            
-            # Check if attribute left/right
-            if any(attr_name.lower() in la.lower() for la in left_attrs) or \
-               any(attr.lower() in la.lower() for la in left_attrs):
+            if OptimizationRules._attribute_belongs_to(attr, left_attrs):
                 L1.append(attr)
-            elif any(attr_name.lower() in ra.lower() for ra in right_attrs) or \
-                 any(attr.lower() in ra.lower() for ra in right_attrs):
+            elif OptimizationRules._attribute_belongs_to(attr, right_attrs):
                 L2.append(attr)
             else:
-                # Untuk yg ambigu
-                L1.append(attr)
-                L2.append(attr)
+                L1.append(attr)  # Default to left
+                print(f"[Warning] Ambiguous attribute '{attr}' assigned to left side")
         
-        # L3: join attributes from left not in project list
-        L3 = []
-        for attr in join_attrs:
-            if attr not in L1 and any(attr.lower() in la.lower() for la in left_attrs):
-                L3.append(attr)
+        # L3: join attributes kiri yang gaada di L1
+        L3 = [attr for attr in join_attrs 
+            if attr not in L1 and OptimizationRules._attribute_belongs_to(attr, left_attrs)]
         
-        # L4: join attributes from right not in project list
-        L4 = []
-        for attr in join_attrs:
-            if attr not in L2 and any(attr.lower() in ra.lower() for ra in right_attrs):
-                L4.append(attr)
+        # L4: join attributes kanan yang gaada di in L2
+        L4 = [attr for attr in join_attrs 
+            if attr not in L2 and OptimizationRules._attribute_belongs_to(attr, right_attrs)]
         
-        # new projection
-        left_project_attrs = list(set(L1 + L3)) if (L1 or L3) else ['*']
-        right_project_attrs = list(set(L2 + L4)) if (L2 or L4) else ['*']
+        # craete new
+        left_project_attrs = list(set(L1 + L3)) if (L1 or L3) else None
+        right_project_attrs = list(set(L2 + L4)) if (L2 or L4) else None
         
-        # create new nodes
+        # buidl new
         new_left = left_subtree
-        if left_project_attrs != ['*'] and len(left_project_attrs) > 0:
-            left_proj = QueryTree(NodeType.PROJECT.value, left_project_attrs, [], None)
+        if left_project_attrs:
+            # string consistency
+            left_proj_str = ', '.join(left_project_attrs)
+            left_proj = QueryTree(NodeType.PROJECT.value, left_proj_str, [], None)
             left_proj.add_child(left_subtree)
             new_left = left_proj
         
         new_right = right_subtree
-        if right_project_attrs != ['*'] and len(right_project_attrs) > 0:
-            right_proj = QueryTree(NodeType.PROJECT.value, right_project_attrs, [], None)
+        if right_project_attrs:
+            right_proj_str = ', '.join(right_project_attrs)
+            right_proj = QueryTree(NodeType.PROJECT.value, right_proj_str, [], None)
             right_proj.add_child(right_subtree)
             new_right = right_proj
         
-        # rebuild 
+        # rebuild join
         new_join = QueryTree(child.type, child.val, [], None)
         new_join.add_child(new_left)
         new_join.add_child(new_right)
         
-        # outer projection (klo butuh)
+        # Outer projection if join attributes were added
         if L3 or L4:
-            outer_proj = QueryTree(NodeType.PROJECT.value, project_attrs, [], None)
+            # convert string
+            outer_proj_str = ', '.join(project_attrs)
+            outer_proj = QueryTree(NodeType.PROJECT.value, outer_proj_str, [], None)
             outer_proj.add_child(new_join)
             return outer_proj
         
         return new_join
+
+    @staticmethod
+    def _attribute_belongs_to(attr, table_attrs):
+        """Helper: Check if attribute belongs to a table"""
+        if '.' in attr:
+            table_prefix = attr.split('.')[0]
+            for table_attr in table_attrs:
+                if table_attr == f"{table_prefix}.*":
+                    return True
+                if table_attr.startswith(f"{table_prefix}."):
+                    return True
+        return False
 
     @staticmethod
     def _decompose_conjunctive_selection(selection_node):
