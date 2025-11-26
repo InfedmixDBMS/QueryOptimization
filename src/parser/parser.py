@@ -157,6 +157,7 @@ class Parser:
                 table_name = first_table_tokens[0]
                 alias = first_table_tokens[1] if len(first_table_tokens) > 1 and first_table_tokens[1].upper() not in KEYWORDS else None
                 current_node = QueryTree(NodeType.TABLE.value, table_name, [], None)
+                current_node.alias = alias 
                 
                 for i, join_pos in enumerate(join_positions):
                     if i + 1 < len(join_positions):
@@ -177,6 +178,7 @@ class Parser:
                         join_condition = self.parse_condition(condition_tokens)
                         
                         join_table = QueryTree(NodeType.TABLE.value, join_table_name, [], None)
+                        join_table.alias = join_alias
                         join_node = QueryTree(NodeType.JOIN.value, join_condition, [], None)
                         join_node.add_child(current_node)
                         join_node.add_child(join_table)

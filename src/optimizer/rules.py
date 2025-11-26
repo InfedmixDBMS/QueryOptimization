@@ -61,17 +61,16 @@ class OptimizationRules:
                 tree.childs[i] = OptimizationRules.push_down_projection(child)
         
         # Process current node
+
         if tree.type == "PROJECT":
-            original = tree
-            # Eliminate cascade projections (Rule 3)
-            # tree = OptimizationRules._eliminate_projection_cascade(tree) -> Rule 3 taro sini sih harusnya
-            
-            # Try to distribute over join (Rule 8)
-            tree = OptimizationRules._helper_distribute_projection_over_join(tree)
-            if tree != original:
-                tree = OptimizationRules.push_down_projection(tree) 
-        
+            new_tree = OptimizationRules._helper_distribute_projection_over_join(tree)
+            return new_tree  # STOP here, don't recurse
+
+        # Only recurse if NOT PROJECT
+        for child in tree.childs:
+            tree.childs[i] = OptimizationRules.push_down_projection(child)
         return tree
+        
 
     @staticmethod
     def combine_selections(tree):
@@ -162,11 +161,20 @@ class OptimizationRules:
             return tree
         
         child = tree.childs[0]
+
+        # Skip select to find join
+        join_node = child
+        intermediate_nodes = [] 
         
-        if child.type not in ["JOIN", "NATURAL-JOIN"]:
+        while join_node and join_node.type == "SELECT":
+            intermediate_nodes.append(join_node)
+            join_node = join_node.childs[0] if join_node.childs else None
+        
+        # cek join
+        if not join_node or join_node.type not in ["JOIN", "NATURAL-JOIN"]:
             return tree
         
-        if len(child.childs) < 2:
+        if len(join_node.childs) < 2:
             return tree
         
         project_attrs = tree.val
@@ -175,9 +183,9 @@ class OptimizationRules:
         elif not isinstance(project_attrs, list):
             project_attrs = [str(project_attrs)]
         
-        join_condition = child.val
-        left_subtree = child.childs[0]
-        right_subtree = child.childs[1]
+        join_condition = join_node.val
+        left_subtree = join_node.childs[0]
+        right_subtree = join_node.childs[1]
         
         # Get attrs dari each side
         left_attrs = OptimizationRules._get_attributes_from_tree(left_subtree)
@@ -228,30 +236,48 @@ class OptimizationRules:
             new_right = right_proj
         
         # rebuild join
-        new_join = QueryTree(child.type, child.val, [], None)
+        new_join = QueryTree(join_node.type, join_node.val, [], None)
         new_join.add_child(new_left)
         new_join.add_child(new_right)
+
+        current = new_join
+        for select_node in reversed(intermediate_nodes):
+            new_select = QueryTree(select_node.type, select_node.val, [], None)
+            new_select.add_child(current)
+            current = new_select
         
         # Outer projection if join attributes were added
         if L3 or L4:
             # convert string
             outer_proj_str = ', '.join(project_attrs)
             outer_proj = QueryTree(NodeType.PROJECT.value, outer_proj_str, [], None)
-            outer_proj.add_child(new_join)
+            outer_proj.add_child(current)
             return outer_proj
         
-        return new_join
+        return current
 
     @staticmethod
     def _attribute_belongs_to(attr, table_attrs):
         """Helper: Check if attribute belongs to a table"""
-        if '.' in attr:
-            table_prefix = attr.split('.')[0]
-            for table_attr in table_attrs:
-                if table_attr == f"{table_prefix}.*":
+        if '.' not in attr:
+            return False
+        
+        attr_prefix = attr.split('.')[0].lower()  # 'emp', 'dept'
+        
+        for table_attr in table_attrs:
+            if table_attr.endswith('.*'):
+                # Extract table name: "employees.*" → "employees"
+                table_name = table_attr.replace('.*', '').lower()
+                
+                # Match: emp → employees, dept → departments
+                # Check if prefix is substring of table name OR vice versa
+                if attr_prefix in table_name or table_name.startswith(attr_prefix):
                     return True
-                if table_attr.startswith(f"{table_prefix}."):
-                    return True
+            
+            # Exact match: emp.id == emp.id
+            if table_attr.lower().startswith(f"{attr_prefix}."):
+                return True
+        
         return False
 
     @staticmethod
@@ -307,8 +333,15 @@ class OptimizationRules:
         attrs = []
         
         if tree.type == "TABLE":
-            # return table name
-            attrs.append(tree.val + ".*")
+            table_name = tree.val  # e.g., "employees"
+            
+            # Add full table name
+            attrs.append(table_name + ".*")  # "employees.*"
+            
+            # ✅ ADD ALIAS if exists
+            if hasattr(tree, 'alias') and tree.alias:
+                attrs.append(tree.alias + ".*")  # "emp.*"
+        
         elif tree.type == "PROJECT":
             proj_attrs = tree.val
             if isinstance(proj_attrs, str):

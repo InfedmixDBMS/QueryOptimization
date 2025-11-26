@@ -12,23 +12,15 @@ def main():
 
     # Example query
     query = """
-        SELECT
-            emp.employee_id,
-            emp.name,
-            dept.department_name,
-            proj.project_name
-        FROM
-            employees emp
-        INNER JOIN
-            departments dept ON emp.department_id = dept.department_id
-        INNER JOIN
-            projects proj ON dept.department_id = proj.department_id
-        WHERE
-            emp.salary > 80000 
-            AND emp.experience_years >= 5
-            AND emp.age < 50
-            AND dept.budget > 1000000
-            AND proj.status = 'active'
+    SELECT
+        emp.employee_id,
+        dept.department_name
+    FROM
+        employees emp
+    INNER JOIN
+        departments dept ON emp.department_id = dept.department_id
+    WHERE
+        emp.salary > 80000
     """
 
     print("="*60)
