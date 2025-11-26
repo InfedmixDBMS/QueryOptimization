@@ -24,41 +24,44 @@ class OptimizationRules:
     def push_down_selection(tree):
         """
         Breaks selection with AND conditions into chain of selection nodes
+        and distributes them over joins
         """
         if tree is None:
             return None
         
-        # Proses current node
-        if tree.type == "SELECT" and isinstance(tree.val, ConditionNode):
-            decomposed_tree = OptimizationRules._decompose_conjunctive_selection(tree)
-            if decomposed_tree != tree:  # Kalau ada perubahan
-                tree = decomposed_tree
-        
-        # Recursively apply to children
+        # Apply recursively to children first (bottom-up)
         if hasattr(tree, 'childs') and tree.childs:
             for i, child in enumerate(tree.childs):
                 tree.childs[i] = OptimizationRules.push_down_selection(child)
+        
+        # Process current node
+        if tree.type == "SELECT":
+            # First decompose conjunctive selections
+            tree = OptimizationRules._decompose_conjunctive_selection(tree)
+            
+            # Then try to push down over joins
+            # tree = OptimizationRules._push_selection_over_join(tree) -> Ini buat integrate sama rules 7 ya
         
         return tree
 
     @staticmethod
     def _decompose_conjunctive_selection(selection_node):
         """
-        Helper function to decompose a selection node with AND conditions
+        Helper: function to decompose a selection node with AND conditions
         """
-        
         condition = selection_node.val
         child = selection_node.childs[0] if selection_node.childs else None
         
         if child is None:
             return selection_node
         
-        # Extract semua kondisi AND
+        # Extract all AND conditions
         and_conditions = OptimizationRules._extract_and_conditions(condition)
         
         if len(and_conditions) <= 1:
             return selection_node
         
+        # Build chain of selections from bottom to top
         current_tree = child
         
         for cond in reversed(and_conditions): 
@@ -71,24 +74,22 @@ class OptimizationRules:
     @staticmethod
     def _extract_and_conditions(condition_node):
         """
-        Extract all individual conditions connected by AND operators
+        Helper: Extract all individual conditions connected by AND operators
         """
-
         if isinstance(condition_node, ConditionLeaf):
             return [condition_node]
         
         elif isinstance(condition_node, ConditionOperator):
             if condition_node.operator == "AND":
-                # Extract left adn rights
+                # Recursively extract from left and right
                 left_conditions = OptimizationRules._extract_and_conditions(condition_node.left)
                 right_conditions = OptimizationRules._extract_and_conditions(condition_node.right)
                 return left_conditions + right_conditions
             else:
-                # OR
+                # OR or other operators - keep as single condition
                 return [condition_node]
         
         else:
-            # Unknown type
             return [condition_node]
 
     @staticmethod
@@ -177,3 +178,4 @@ class OptimizationRules:
         """
         # TODO: Implement projection distribution
         return tree
+    
