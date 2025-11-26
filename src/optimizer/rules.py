@@ -20,6 +20,7 @@ class OptimizationRules:
     Contains all optimization rules for query transformation
     """
 
+### MAIN ###
     @staticmethod
     def push_down_selection(tree):
         """
@@ -36,61 +37,11 @@ class OptimizationRules:
         
         # Process current node
         if tree.type == "SELECT":
-            # First decompose conjunctive selections
             tree = OptimizationRules._decompose_conjunctive_selection(tree)
             
-            # Then try to push down over joins
             # tree = OptimizationRules._push_selection_over_join(tree) -> Ini buat integrate sama rules 7 ya
         
         return tree
-
-    @staticmethod
-    def _decompose_conjunctive_selection(selection_node):
-        """
-        Helper: function to decompose a selection node with AND conditions
-        """
-        condition = selection_node.val
-        child = selection_node.childs[0] if selection_node.childs else None
-        
-        if child is None:
-            return selection_node
-        
-        # Extract all AND conditions
-        and_conditions = OptimizationRules._extract_and_conditions(condition)
-        
-        if len(and_conditions) <= 1:
-            return selection_node
-        
-        # Build chain of selections from bottom to top
-        current_tree = child
-        
-        for cond in reversed(and_conditions): 
-            new_selection = QueryTree(NodeType.SELECT.value, cond, [], None)
-            new_selection.add_child(current_tree)
-            current_tree = new_selection
-        
-        return current_tree
-
-    @staticmethod
-    def _extract_and_conditions(condition_node):
-        """
-        Helper: Extract all individual conditions connected by AND operators
-        """
-        if isinstance(condition_node, ConditionLeaf):
-            return [condition_node]
-        
-        elif isinstance(condition_node, ConditionOperator):
-            if condition_node.operator == "AND":
-                # Recursively extract from left and right
-                left_conditions = OptimizationRules._extract_and_conditions(condition_node.left)
-                right_conditions = OptimizationRules._extract_and_conditions(condition_node.right)
-                return left_conditions + right_conditions
-            else:
-                # OR or other operators - keep as single condition
-                return [condition_node]
-        
-        else:
-            return [condition_node]
 
     @staticmethod
     def push_down_projection(tree):
@@ -178,4 +129,51 @@ class OptimizationRules:
         """
         # TODO: Implement projection distribution
         return tree
-    
+
+### HELPER ###
+    @staticmethod
+    def _decompose_conjunctive_selection(selection_node):
+        """
+        Helper: function to decompose a selection node with AND conditions
+        """
+        condition = selection_node.val
+        child = selection_node.childs[0] if selection_node.childs else None
+        
+        if child is None:
+            return selection_node
+        
+        # extract AND
+        and_conditions = OptimizationRules._extract_and_conditions(condition)
+        
+        if len(and_conditions) <= 1:
+            return selection_node
+        
+        # build chain
+        current_tree = child
+        
+        for cond in reversed(and_conditions): 
+            new_selection = QueryTree(NodeType.SELECT.value, cond, [], None)
+            new_selection.add_child(current_tree)
+            current_tree = new_selection
+        
+        return current_tree
+
+    @staticmethod
+    def _extract_and_conditions(condition_node):
+        """
+        Helper: Extract all individual conditions connected by AND operators
+        """
+        if isinstance(condition_node, ConditionLeaf):
+            return [condition_node]
+        
+        elif isinstance(condition_node, ConditionOperator):
+            if condition_node.operator == "AND":
+                left_conditions = OptimizationRules._extract_and_conditions(condition_node.left)
+                right_conditions = OptimizationRules._extract_and_conditions(condition_node.right)
+                return left_conditions + right_conditions
+            else:
+                # OR or otehr operators 
+                return [condition_node]
+        
+        else:
+            return [condition_node]
