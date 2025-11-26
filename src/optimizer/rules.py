@@ -109,6 +109,46 @@ class OptimizationRules:
         return tree
 
     @staticmethod
+    def swap_selection(tree):
+        """
+        Rule 2: Selection Commutativity
+        """
+        if tree is None:
+            return None
+        
+        # SELECT node with a SELECT child
+        if (tree.type != "SELECT" or 
+            not tree.childs or 
+            tree.childs[0].type != "SELECT"):
+            if hasattr(tree, 'childs') and tree.childs:
+                for i, child in enumerate(tree.childs):
+                    tree.childs[i] = OptimizationRules.swap_selection(child)
+            return tree
+        
+        parent_condition = tree.val
+        child_selection = tree.childs[0]
+        child_condition = child_selection.val
+        grandchild = child_selection.childs[0] if child_selection.childs else None
+        
+        if grandchild is None:
+            return tree
+        
+        # swapped conditions
+        new_parent = QueryTree(NodeType.SELECT.value, child_condition, [], None)
+        new_child = QueryTree(NodeType.SELECT.value, parent_condition, [], None)
+        
+        # new_parent -> new_child -> grandchild
+        new_child.add_child(grandchild)
+        new_parent.add_child(new_child)
+        
+        # recursive
+        if hasattr(new_parent, 'childs') and new_parent.childs:
+            for i, child in enumerate(new_parent.childs):
+                new_parent.childs[i] = OptimizationRules.swap_selection(child)
+        
+        return new_parent
+
+    @staticmethod
     def combine_cartesian_with_selection(tree):
         """
         Combine Cartesian product with selection to form join
