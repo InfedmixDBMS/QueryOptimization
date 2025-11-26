@@ -41,7 +41,7 @@ class OptimizationRules:
             tree = OptimizationRules._decompose_conjunctive_selection(tree)
 
             if tree != original:
-                tree = OptimizationRules.push_down_projection(tree) 
+                tree = OptimizationRules.push_down_selection(tree) 
 
             # tree = OptimizationRules._push_selection_over_join(tree) -> Ini buat integrate sama rules 7 ya
         
@@ -62,11 +62,14 @@ class OptimizationRules:
         
         # Process current node
         if tree.type == "PROJECT":
+            original = tree
             # Eliminate cascade projections (Rule 3)
             # tree = OptimizationRules._eliminate_projection_cascade(tree) -> Rule 3 taro sini sih harusnya
             
             # Try to distribute over join (Rule 8)
             tree = OptimizationRules._helper_distribute_projection_over_join(tree)
+            if tree != original:
+                tree = OptimizationRules.push_down_projection(tree) 
         
         return tree
 
