@@ -49,6 +49,10 @@ class PlanOptimizer:
         plan5 = self._generate_conservative_plan(copy.deepcopy(original_tree))
         candidate_plans.append(('Conservative (Minimal)', plan5))
         
+        # Plan 6: Swap-Optimized Strategy
+        plan6 = self._generate_swap_optimized_plan(copy.deepcopy(original_tree))
+        candidate_plans.append(('Swap-Optimized (Rule 2)', plan6))
+        
         print("\nCOST EVALUATION:")
         print("-" * 60)
         
@@ -74,6 +78,7 @@ class PlanOptimizer:
         Priority: Reduce data size early via selections
         """
         tree = self.rules.push_down_selection(tree)
+        tree = self.rules.swap_selection(tree) 
         tree = self.rules.combine_selections(tree)
         tree = self.rules.push_down_projection(tree)
         tree = self.rules.distribute_selection_over_join(tree)
@@ -104,6 +109,7 @@ class PlanOptimizer:
         Priority: Balance between selection and projection push-down
         """
         tree = self.rules.push_down_selection(tree)
+        tree = self.rules.swap_selection(tree)
         tree = self.rules.push_down_projection(tree)
         tree = self.rules.distribute_selection_over_join(tree)
         tree = self.rules.distribute_projection_over_join(tree)
@@ -139,4 +145,20 @@ class PlanOptimizer:
         tree = self.rules.push_down_selection(tree)
         tree = self.rules.combine_selections(tree)
         tree = self.rules.combine_cartesian_with_selection(tree)
+        return tree
+    
+    def _generate_swap_optimized_plan(self, tree):
+        """
+        Strategy 6: Swap-Optimized Aggressively reorder selections for better performance
+        """
+        tree = self.rules.push_down_selection(tree)
+        tree = self.rules.swap_selection(tree)
+        tree = self.rules.combine_selections(tree)
+        tree = self.rules.push_down_projection(tree)
+        tree = self.rules.distribute_selection_over_join(tree)
+        tree = self.rules.distribute_projection_over_join(tree)
+        tree = self.rules.combine_cartesian_with_selection(tree)
+        tree = self.rules.reorder_joins(tree)
+        tree = self.rules.apply_associativity(tree)
+        
         return tree
