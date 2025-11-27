@@ -50,8 +50,7 @@ class OptimizationRules:
     @staticmethod
     def push_down_projection(tree):
         """
-        Rule 3: Eliminate projection cascades and push projections down the tree
-        Rule 8: Distribute projection over join
+        For Rule 3 & 8
         """
         if tree is None:
             return None
@@ -62,8 +61,7 @@ class OptimizationRules:
                 for i, child in enumerate(tree.childs):
                     tree.childs[i] = OptimizationRules.push_down_projection(child)
             return tree
-        
-        # Process PROJECT nodes
+
         # Rule 3: Eliminate cascade projections
         if tree.childs and tree.childs[0].type == "PROJECT":
             # Skip intermediate PROJECT, go directly to grandchild
@@ -76,12 +74,9 @@ class OptimizationRules:
         
         # Check if transformation actually happened by comparing TYPE
         if new_tree.type != "PROJECT":
-            # Tree was transformed (e.g., PROJECT removed, JOIN at root now)
             # Recurse to optimize the new structure
             return OptimizationRules.push_down_projection(new_tree)
         
-        # Tree is still PROJECT (no distribution happened)
-        # DON'T recurse to avoid infinite loop
         return new_tree
         
 
