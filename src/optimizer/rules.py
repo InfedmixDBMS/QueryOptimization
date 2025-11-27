@@ -151,18 +151,82 @@ class OptimizationRules:
     @staticmethod
     def combine_cartesian_with_selection(tree):
         """
-        Combine Cartesian product with selection to form join
+        Rule 4: Combine selection with Cartesian product or join
+        - σp(E1 × E2) = E1 ⋈p E2
+        - σp(E1 ⋈q E2) = E1 ⋈p∧q E2
         """
-        # TODO: Implement cartesian-to-join transformation
+        if tree is None:
+            return None
+
+        if hasattr(tree, 'childs') and tree.childs:
+            for i, child in enumerate(tree.childs):
+                tree.childs[i] = OptimizationRules.combine_cartesian_with_selection(child)
+
+        if tree.type != "SELECT" or not tree.childs:
+            return tree
+
+        child = tree.childs[0]
+
+        if child.type == "CARTESIAN-PRODUCT":
+            selection_condition = tree.val
+            left_subtree = child.childs[0] if len(child.childs) > 0 else None
+            right_subtree = child.childs[1] if len(child.childs) > 1 else None
+
+            if not left_subtree or not right_subtree:
+                return tree
+
+            new_join = QueryTree(NodeType.JOIN.value, selection_condition, [], None)
+            new_join.add_child(left_subtree)
+            new_join.add_child(right_subtree)
+
+            return new_join
+
+        elif child.type == "JOIN":
+            selection_condition = tree.val
+            join_condition = child.val
+            left_subtree = child.childs[0] if len(child.childs) > 0 else None
+            right_subtree = child.childs[1] if len(child.childs) > 1 else None
+
+            if not left_subtree or not right_subtree:
+                return tree
+
+            combined_condition = ConditionOperator("AND", join_condition, selection_condition)
+
+            new_join = QueryTree(NodeType.JOIN.value, combined_condition, [], None)
+            new_join.add_child(left_subtree)
+            new_join.add_child(right_subtree)
+
+            return new_join
+
         return tree
 
     @staticmethod
     def reorder_joins(tree):
         """
-        Reorder joins based on commutativity
+        Rule 5: Join commutativity
+        - E1 ⋈θ E2 = E2 ⋈θ E1
         """
-        # TODO: Implement join reordering
-        return tree
+        if tree is None:
+            return None
+
+        if hasattr(tree, 'childs') and tree.childs:
+            for i, child in enumerate(tree.childs):
+                tree.childs[i] = OptimizationRules.reorder_joins(child)
+
+        if tree.type not in ["JOIN", "NATURAL-JOIN"]:
+            return tree
+
+        if len(tree.childs) < 2:
+            return tree
+
+        left_subtree = tree.childs[0]
+        right_subtree = tree.childs[1]
+
+        new_join = QueryTree(tree.type, tree.val, [], None)
+        new_join.add_child(right_subtree)
+        new_join.add_child(left_subtree)
+
+        return new_join
 
     @staticmethod
     def apply_associativity(tree):
@@ -453,7 +517,6 @@ class OptimizationRules:
             # Add full table name
             attrs.append(table_name + ".*")  # "employees.*"
             
-            # ✅ ADD ALIAS if exists
             if hasattr(tree, 'alias') and tree.alias:
                 attrs.append(tree.alias + ".*")  # "emp.*"
         
