@@ -50,7 +50,7 @@ class OptimizationRules:
     @staticmethod
     def push_down_projection(tree):
         """
-        Push projection operations down the tree -> Ini masih buat rule 8 dulu, kalau ada yg make rules lain bisa ditambahin disini
+        Rule 3: Eliminate projection cascades and push projections down the tree
         """
         if tree is None:
             return None
@@ -60,15 +60,20 @@ class OptimizationRules:
             for i, child in enumerate(tree.childs):
                 tree.childs[i] = OptimizationRules.push_down_projection(child)
         
-        # Process current node
-
+        # Process current node - Rule 3: Eliminate projection cascades
         if tree.type == "PROJECT":
+            # Check if child is also a PROJECT
+            if tree.childs and tree.childs[0].type == "PROJECT":
+                # Skip intermediate projections, keep only the outermost
+                child_projection = tree.childs[0]
+                # Connect outermost projection directly to child of inner projection
+                tree.childs = child_projection.childs
+                return tree
+            
+            # Rule 8: Try to distribute projection over join
             new_tree = OptimizationRules._helper_distribute_projection_over_join(tree)
-            return new_tree  # STOP here, don't recurse
-
-        # Only recurse if NOT PROJECT
-        for child in tree.childs:
-            tree.childs[i] = OptimizationRules.push_down_projection(child)
+            return new_tree
+        
         return tree
         
 
@@ -231,10 +236,87 @@ class OptimizationRules:
     @staticmethod
     def apply_associativity(tree):
         """
-        Apply associativity rules to joins
-
+        Rule 6: Apply associativity rules to joins
+        a. Natural join is associative: (E₁ ⋈ E₂) ⋈ E₃ = E₁ ⋈ (E₂ ⋈ E₃)
+        b. Theta join is associative under certain conditions
+        
+        Reorder join chains to improve execution efficiency
         """
-        # TODO: Implement join associativity
+        if tree is None:
+            return None
+        
+        # Apply recursively to children first (bottom-up)
+        if hasattr(tree, 'childs') and tree.childs:
+            for i, child in enumerate(tree.childs):
+                tree.childs[i] = OptimizationRules.apply_associativity(child)
+        
+        # Check if current node is a join
+        if tree.type not in ["JOIN", "NATURAL-JOIN"]:
+            return tree
+        
+        # Check if left child is also a join with the same type
+        if (tree.childs and len(tree.childs) >= 2 and 
+            tree.childs[0].type in ["JOIN", "NATURAL-JOIN"]):
+            
+            left_join = tree.childs[0]
+            right_subtree = tree.childs[1]
+            
+            # For natural join or theta join with compatible conditions
+            if tree.type == "NATURAL-JOIN" and left_join.type == "NATURAL-JOIN":
+                # (E₁ ⋈ E₂) ⋈ E₃ => E₁ ⋈ (E₂ ⋈ E₃)
+                # Extract components: E₁ from left_join.childs[0], E₂ from left_join.childs[1]
+                E1 = left_join.childs[0]
+                E2 = left_join.childs[1]
+                E3 = right_subtree
+                
+                # Create new right join: E₂ ⋈ E₃
+                new_right_join = QueryTree(tree.type, tree.val, [], None)
+                new_right_join.add_child(E2)
+                new_right_join.add_child(E3)
+                
+                # Create new top join: E₁ ⋈ (E₂ ⋈ E₃)
+                new_top_join = QueryTree(tree.type, left_join.val, [], None)
+                new_top_join.add_child(E1)
+                new_top_join.add_child(new_right_join)
+                
+                return new_top_join
+            
+            elif tree.type == "JOIN" and left_join.type == "JOIN":
+                # For theta join, check if conditions allow associativity
+                # θ₂ should only involve attributes from E₂ and E₃
+                left_condition = left_join.val
+                right_condition = tree.val
+                
+                # Get attributes from E₂ and E₃
+                E2_attrs = OptimizationRules._get_attributes_from_tree(left_join.childs[1])
+                E3_attrs = OptimizationRules._get_attributes_from_tree(right_subtree)
+                
+                # Check if right_condition only uses E₂ and E₃ attributes
+                right_cond_attrs = OptimizationRules._get_attributes_from_condition(right_condition)
+                
+                # Verify associativity condition
+                valid_associativity = all(
+                    OptimizationRules._attribute_belongs_to(attr, E2_attrs) or
+                    OptimizationRules._attribute_belongs_to(attr, E3_attrs)
+                    for attr in right_cond_attrs
+                )
+                
+                if valid_associativity:
+                    E1 = left_join.childs[0]
+                    E2 = left_join.childs[1]
+                    E3 = right_subtree
+                    
+                    # (E₁ ⋈_{θ₁} E₂) ⋈_{θ₂} E₃ => E₁ ⋈_{θ₁,θ₂} (E₂ ⋈_{θ₂} E₃)
+                    new_right_join = QueryTree(tree.type, tree.val, [], None)
+                    new_right_join.add_child(E2)
+                    new_right_join.add_child(E3)
+                    
+                    new_top_join = QueryTree(tree.type, left_join.val, [], None)
+                    new_top_join.add_child(E1)
+                    new_top_join.add_child(new_right_join)
+                    
+                    return new_top_join
+        
         return tree
 
     @staticmethod
