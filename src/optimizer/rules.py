@@ -321,7 +321,8 @@ class OptimizationRules:
             return final_select
         
         return new_join
-        
+
+    @staticmethod  
     def distribute_projection_over_join(tree):
         """
         Distribute projection operations over join operations
