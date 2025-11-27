@@ -179,10 +179,85 @@ class OptimizationRules:
         Distribute selection operations over join operations
 
         """
-        # TODO: Implement selection distribution
-        return tree
-
-    @staticmethod
+        if tree is None:
+            return None
+            
+        # recursive
+        if hasattr(tree, 'childs') and tree.childs:
+            for i, child in enumerate(tree.childs):
+                tree.childs[i] = OptimizationRules.distribute_selection_over_join(child)
+                
+        if tree.type != "SELECT" or not tree.childs:
+            return tree
+            
+        child = tree.childs[0]
+        
+        if child.type not in ["JOIN", "NATURAL-JOIN"]:
+            return tree
+            
+        condition = tree.val
+        left_subtree = child.childs[0] if len(child.childs) > 0 else None
+        right_subtree = child.childs[1] if len(child.childs) > 1 else None
+        
+        if not left_subtree or not right_subtree:
+            return tree
+        
+        left_attrs = OptimizationRules._get_attributes_from_tree(left_subtree)
+        right_attrs = OptimizationRules._get_attributes_from_tree(right_subtree)
+        and_conditions = OptimizationRules._extract_and_conditions(condition)
+        
+        left_conditions = []
+        right_conditions = []
+        both_conditions = []
+        
+        for cond in and_conditions:
+            cond_attrs = OptimizationRules._get_attributes_from_condition(cond)
+            
+            if not cond_attrs:
+                both_conditions.append(cond)
+                continue
+            is_left = all(OptimizationRules._attribute_belongs_to(attr, left_attrs) for attr in cond_attrs)
+            is_right = all(OptimizationRules._attribute_belongs_to(attr, right_attrs) for attr in cond_attrs)
+            
+            if is_left and not is_right:
+                left_conditions.append(cond)
+            elif is_right and not is_left:
+                right_conditions.append(cond)
+            else:
+                both_conditions.append(cond)
+        
+        new_left = left_subtree
+        new_right = right_subtree
+        if left_conditions:
+            combined_left = left_conditions[0]
+            for cond in left_conditions[1:]:
+                combined_left = ConditionOperator("AND", combined_left, cond)
+            
+            new_left = QueryTree(NodeType.SELECT.value, combined_left, [], None)
+            new_left.add_child(left_subtree)
+        if right_conditions:
+            combined_right = right_conditions[0]
+            for cond in right_conditions[1:]:
+                combined_right = ConditionOperator("AND", combined_right, cond)
+            
+            new_right = QueryTree(NodeType.SELECT.value, combined_right, [], None)
+            new_right.add_child(right_subtree)
+        
+        new_join = QueryTree(child.type, child.val, [], None)
+        new_join.add_child(new_left)
+        new_join.add_child(new_right)
+        
+        if both_conditions:
+            combined_both = both_conditions[0]
+            for cond in both_conditions[1:]:
+                combined_both = ConditionOperator("AND", combined_both, cond)
+            
+            final_select = QueryTree(NodeType.SELECT.value, combined_both, [], None)
+            final_select.add_child(new_join)
+            return final_select
+        
+        return new_join
+        
     def distribute_projection_over_join(tree):
         """
         Distribute projection operations over join operations
