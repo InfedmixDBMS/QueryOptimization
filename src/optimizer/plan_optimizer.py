@@ -25,7 +25,7 @@ class PlanOptimizer:
         original_tree = parsed_query.query_tree
         
         print("\n" + "="*60)
-        print("🔍 GENERATING MULTIPLE QUERY PLANS")
+        print("GENERATING MULTIPLE QUERY PLANS")
         print("="*60)
         candidate_plans = []
         
@@ -82,7 +82,6 @@ class PlanOptimizer:
         tree = self.rules.combine_selections(tree)
         tree = self.rules.push_down_projection(tree)
         tree = self.rules.distribute_selection_over_join(tree)
-        tree = self.rules.distribute_projection_over_join(tree)
         tree = self.rules.combine_cartesian_with_selection(tree)
         tree = self.rules.reorder_joins(tree)
         tree = self.rules.apply_associativity(tree)
@@ -94,7 +93,6 @@ class PlanOptimizer:
         Priority: Reduce tuple width early via projections
         """
         tree = self.rules.push_down_projection(tree)
-        tree = self.rules.distribute_projection_over_join(tree)
         tree = self.rules.push_down_selection(tree)
         tree = self.rules.combine_selections(tree)
         tree = self.rules.distribute_selection_over_join(tree)
@@ -112,7 +110,6 @@ class PlanOptimizer:
         tree = self.rules.swap_selection(tree)
         tree = self.rules.push_down_projection(tree)
         tree = self.rules.distribute_selection_over_join(tree)
-        tree = self.rules.distribute_projection_over_join(tree)
         tree = self.rules.combine_selections(tree)
         tree = self.rules.combine_cartesian_with_selection(tree)
         tree = self.rules.reorder_joins(tree)
@@ -125,13 +122,11 @@ class PlanOptimizer:
         Priority: Maximize rule application and combinations
         """
         # Multiple passes untuk optimasi agresif
-        for _ in range(2):  
-            tree = self.rules.push_down_selection(tree)
-            tree = self.rules.push_down_projection(tree)
-            tree = self.rules.combine_selections(tree)
+        tree = self.rules.push_down_selection(tree)
+        tree = self.rules.push_down_projection(tree)
+        tree = self.rules.combine_selections(tree)
         
         tree = self.rules.distribute_selection_over_join(tree)
-        tree = self.rules.distribute_projection_over_join(tree)
         tree = self.rules.combine_cartesian_with_selection(tree)
         tree = self.rules.reorder_joins(tree)
         tree = self.rules.apply_associativity(tree)
@@ -156,7 +151,6 @@ class PlanOptimizer:
         tree = self.rules.combine_selections(tree)
         tree = self.rules.push_down_projection(tree)
         tree = self.rules.distribute_selection_over_join(tree)
-        tree = self.rules.distribute_projection_over_join(tree)
         tree = self.rules.combine_cartesian_with_selection(tree)
         tree = self.rules.reorder_joins(tree)
         tree = self.rules.apply_associativity(tree)
