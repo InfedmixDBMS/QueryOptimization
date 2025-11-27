@@ -30,7 +30,7 @@ def main():
     # Parse query
     print("\nPARSING QUERY...")
     parsed_query = optimizer.parse_query(query)
-    print(f"✓ Tables: {parsed_query.tables}")
+    print(f"Tables: {parsed_query.tables}")
     
     print("\nORIGINAL QUERY TREE:")
     parsed_query.print_tree()
@@ -40,7 +40,7 @@ def main():
     
     # Optimize with multiple plan selection
     print("\n" + "="*60)
-    print("⚙️  OPTIMIZATION PHASE")
+    print("OPTIMIZATION PHASE")
     print("="*60)
     
     optimized_query = optimizer.optimize_query(parsed_query)

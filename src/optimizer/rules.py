@@ -51,30 +51,38 @@ class OptimizationRules:
     def push_down_projection(tree):
         """
         Rule 3: Eliminate projection cascades and push projections down the tree
+        Rule 8: Distribute projection over join
         """
         if tree is None:
             return None
         
-        # Apply recursively to children first (bottom-up)
-        if hasattr(tree, 'childs') and tree.childs:
-            for i, child in enumerate(tree.childs):
-                tree.childs[i] = OptimizationRules.push_down_projection(child)
+        # For non-PROJECT nodes, recurse on children FIRST (bottom-up)
+        if tree.type != "PROJECT":
+            if hasattr(tree, 'childs') and tree.childs:
+                for i, child in enumerate(tree.childs):
+                    tree.childs[i] = OptimizationRules.push_down_projection(child)
+            return tree
         
-        # Process current node - Rule 3: Eliminate projection cascades
-        if tree.type == "PROJECT":
-            # Check if child is also a PROJECT
-            if tree.childs and tree.childs[0].type == "PROJECT":
-                # Skip intermediate projections, keep only the outermost
-                child_projection = tree.childs[0]
-                # Connect outermost projection directly to child of inner projection
-                tree.childs = child_projection.childs
-                return tree
-            
-            # Rule 8: Try to distribute projection over join
-            new_tree = OptimizationRules._helper_distribute_projection_over_join(tree)
-            return new_tree
+        # Process PROJECT nodes
+        # Rule 3: Eliminate cascade projections
+        if tree.childs and tree.childs[0].type == "PROJECT":
+            # Skip intermediate PROJECT, go directly to grandchild
+            tree.childs = tree.childs[0].childs
+            # Recurse to check for more cascades
+            return OptimizationRules.push_down_projection(tree)
         
-        return tree
+        # Rule 8: Try to distribute over join
+        new_tree = OptimizationRules._helper_distribute_projection_over_join(tree)
+        
+        # Check if transformation actually happened by comparing TYPE
+        if new_tree.type != "PROJECT":
+            # Tree was transformed (e.g., PROJECT removed, JOIN at root now)
+            # Recurse to optimize the new structure
+            return OptimizationRules.push_down_projection(new_tree)
+        
+        # Tree is still PROJECT (no distribution happened)
+        # DON'T recurse to avoid infinite loop
+        return new_tree
         
 
     @staticmethod
@@ -510,8 +518,7 @@ class OptimizationRules:
         
         # Outer projection if join attributes were added
         if L3 or L4:
-            # convert string
-            outer_proj_str = ', '.join(project_attrs)
+            outer_proj_str = ', '.join(project_attrs)  # Original project attributes
             outer_proj = QueryTree(NodeType.PROJECT.value, outer_proj_str, [], None)
             outer_proj.add_child(current)
             return outer_proj
@@ -524,20 +531,19 @@ class OptimizationRules:
         if '.' not in attr:
             return False
         
-        attr_prefix = attr.split('.')[0].lower()  # 'emp', 'dept'
+        attr_prefix = attr.split('.')[0].lower()  # e.g., 'emp', 'dept'
         
         for table_attr in table_attrs:
             if table_attr.endswith('.*'):
-                # Extract table name: "employees.*" → "employees"
-                table_name = table_attr.replace('.*', '').lower()
-                
-                # Match: emp → employees, dept → departments
-                # Check if prefix is substring of table name OR vice versa
-                if attr_prefix in table_name or table_name.startswith(attr_prefix):
+                # Extract prefix: "employees.*" → "employees"
+                #                 "emp.*" → "emp"
+                table_prefix = table_attr.replace('.*', '').lower()
+
+                if attr_prefix == table_prefix:
                     return True
             
-            # Exact match: emp.id == emp.id
-            if table_attr.lower().startswith(f"{attr_prefix}."):
+            # Exact attribute match: "emp.id" == "emp.id"
+            if table_attr.lower() == attr.lower():
                 return True
         
         return False
@@ -597,11 +603,11 @@ class OptimizationRules:
         if tree.type == "TABLE":
             table_name = tree.val  # e.g., "employees"
             
-            # Add full table name
-            attrs.append(table_name + ".*")  # "employees.*"
+            # Always add full table name
+            attrs.append(table_name + ".*")
             
             if hasattr(tree, 'alias') and tree.alias:
-                attrs.append(tree.alias + ".*")  # "emp.*"
+                attrs.append(tree.alias + ".*")
         
         elif tree.type == "PROJECT":
             proj_attrs = tree.val
