@@ -74,9 +74,13 @@ class Parser:
         group_idx = tokens.index("GROUP") if "GROUP" in tokens else len(tokens)
         having_idx = tokens.index("HAVING") if "HAVING" in tokens else len(tokens)
         order_idx = tokens.index("ORDER") if "ORDER" in tokens else len(tokens)
+        limit_idx = tokens.index("LIMIT") if "LIMIT" in tokens else len(tokens)
 
         clause_ends = sorted([where_idx, group_idx, having_idx, order_idx,
-                            len(tokens)])
+                            limit_idx, len(tokens)])
+        
+        from_end = min([idx for idx in clause_ends if idx > from_idx],
+                        default=len(tokens))
 
         where_end = min([idx for idx in clause_ends if idx > where_idx],
                         default=len(tokens))
@@ -84,7 +88,8 @@ class Parser:
                         default=len(tokens))
         having_end = min([idx for idx in clause_ends if idx > having_idx],
                         default=len(tokens))
-        order_end = len(tokens)
+        order_end = min([idx for idx in clause_ends if idx > order_idx],
+                        default=len(tokens))
 
         # Parse SELECT clause
         select_tokens = tokens[select_idx + 1: from_idx]
@@ -112,7 +117,7 @@ class Parser:
             select_attrs.append(' '.join(current_attr))
 
         # Parse FROM clause
-        from_tokens = tokens[from_idx + 1: where_idx]
+        from_tokens = tokens[from_idx + 1: from_end]
 
         # Filter out JOIN type keywords
         filtered_from_tokens = [t for t in from_tokens
@@ -134,7 +139,16 @@ class Parser:
                     continue
                 
                 table_name = filtered_from_tokens[i]
-                if (i + 1 < len(filtered_from_tokens) and
+                alias = None
+                
+                # Check for AS keyword
+                if (i + 2 < len(filtered_from_tokens) and 
+                        filtered_from_tokens[i + 1] == 'AS'):
+                    alias = filtered_from_tokens[i + 2]
+                    tables.append((table_name, alias))
+                    i += 3
+                # Check for alias without AS
+                elif (i + 1 < len(filtered_from_tokens) and
                         filtered_from_tokens[i + 1] != ',' and
                         filtered_from_tokens[i + 1].upper() not in KEYWORDS):
                     alias = filtered_from_tokens[i + 1]
@@ -144,7 +158,6 @@ class Parser:
                     tables.append((table_name, None))
                     i += 1
             
-            # Create table nodes
             table_nodes = []
             for table_name, alias in tables:
                 node = QueryTree(NodeType.TABLE.value, table_name, [], None)
@@ -168,7 +181,13 @@ class Parser:
             first_table_tokens = filtered_from_tokens[:join_positions[0]]
             if len(first_table_tokens) >= 1:
                 table_name = first_table_tokens[0]
-                alias = first_table_tokens[1] if len(first_table_tokens) > 1 and first_table_tokens[1].upper() not in KEYWORDS else None
+                alias = None
+                # Check for AS keyword
+                if len(first_table_tokens) >= 3 and first_table_tokens[1] == 'AS':
+                    alias = first_table_tokens[2]
+                # Check for alias without AS
+                elif len(first_table_tokens) > 1 and first_table_tokens[1].upper() not in KEYWORDS:
+                    alias = first_table_tokens[1]
                 current_node = QueryTree(NodeType.TABLE.value, table_name, [], None)
                 current_node.alias = alias 
                 
@@ -185,7 +204,13 @@ class Parser:
                         
                         table_tokens = join_tokens[1:on_idx]
                         join_table_name = table_tokens[0]
-                        join_alias = table_tokens[1] if len(table_tokens) > 1 and table_tokens[1].upper() not in KEYWORDS else None
+                        join_alias = None
+                        # Check for AS keyword
+                        if len(table_tokens) >= 3 and table_tokens[1] == 'AS':
+                            join_alias = table_tokens[2]
+                        # Check for alias without AS
+                        elif len(table_tokens) > 1 and table_tokens[1].upper() not in KEYWORDS:
+                            join_alias = table_tokens[1]
                         
                         condition_tokens = join_tokens[on_idx + 1:]
                         join_condition = self.parse_condition(condition_tokens)
@@ -229,6 +254,10 @@ class Parser:
 
         # ORDER BY 
         if order_idx < len(tokens):
+            # Validate BY follows ORDER
+            if order_idx + 1 >= len(tokens) or tokens[order_idx + 1] != "BY":
+                raise ValueError("ORDER must be followed by BY")
+            
             order_tokens = tokens[order_idx + 2: order_end]  
             order_attrs = []
             current_order = []
@@ -245,6 +274,20 @@ class Parser:
             order_node = QueryTree(NodeType.ORDER_BY.value, order_attrs, [], None)
             order_node.add_child(current_tree)
             current_tree = order_node
+
+        # LIMIT
+        if limit_idx < len(tokens):
+            limit_value = tokens[limit_idx + 1] if limit_idx + 1 < len(tokens) else None
+            if limit_value is None:
+                raise ValueError("LIMIT requires a number")
+            
+            try:
+                limit_count = int(limit_value)
+                limit_node = QueryTree(NodeType.LIMIT.value, limit_count, [], None)
+                limit_node.add_child(current_tree)
+                current_tree = limit_node
+            except ValueError:
+                raise ValueError(f"LIMIT value must be a number, got: {limit_value}")
 
         # PROJECT
         root = QueryTree(NodeType.PROJECT.value, select_attrs, [], None)

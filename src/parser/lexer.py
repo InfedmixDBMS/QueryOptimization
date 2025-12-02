@@ -6,7 +6,7 @@ import re
 KEYWORDS = {
     "SELECT", "FROM", "WHERE", "JOIN", "ON", "AND", "OR",
     "ORDER", "BY", "INNER", "LEFT", "RIGHT", "OUTER", "AS",
-    "GROUP", "HAVING"
+    "GROUP", "HAVING", "LIMIT", "ASC", "DESC",
 }
 
 class Lexer:
