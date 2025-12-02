@@ -2,8 +2,24 @@ from ..tree.nodes import ConditionNode, ConditionLeaf, ConditionOperator
 import math
 
 
+try:
+    from ..integration_storage.storage_adapter import StorageAdapter
+    STORAGE_ADAPTER_AVAILABLE = True
+except ImportError:
+    STORAGE_ADAPTER_AVAILABLE = False
+    StorageAdapter = None
+
+
 class Statistics:
-    def __init__(self):
+    def __init__(self, storage_adapter=None):
+        """
+        Initialize Statistics
+        """
+        if storage_adapter is None and STORAGE_ADAPTER_AVAILABLE:
+            storage_adapter = StorageAdapter(use_real_storage=False)
+        
+        self.storage_adapter = storage_adapter
+        self.cache = {}
         self.relations = {}
 
     def add_relation(self, relation_name, nr, lr, br=None, fr=None):
@@ -28,22 +44,66 @@ class Statistics:
             self.relations[relation_name]['distinct_values'][attribute] = count
 
     def get_relation_stats(self, relation_name):
-        return self.relations.get(relation_name, {
+        """Get statistics tries storage adapter first, then legacy"""
+        # Check cache
+        if relation_name in self.cache:
+            return self.cache[relation_name]
+        
+        # Try storage adapter
+        if self.storage_adapter:
+            try:
+                stats = self.storage_adapter.get_table_statistics(relation_name)
+                result = {
+                    'nr': stats['n_r'],
+                    'lr': stats['l_r'],
+                    'br': stats['b_r'],
+                    'fr': stats['f_r'],
+                    'distinct_values': stats['distinct_values']
+                }
+                self.cache[relation_name] = result
+                return result
+            except Exception:
+                pass
+        
+        # Try legacy
+        if relation_name in self.relations:
+            return self.relations[relation_name]
+        
+        # Default
+        return {
             'nr': 1000,
             'lr': 100,
             'br': 10,
             'fr': 100,
             'distinct_values': {}
-        })
+        }
 
     def get_distinct_values(self, relation_name, attribute):
         stats = self.get_relation_stats(relation_name)
         return stats['distinct_values'].get(attribute, stats['nr'] // 10)
 
+    
+    def clear_cache(self):
+        """Clear statistics cache"""
+        self.cache = {}
+
 
 class CostCalculator:
-    def __init__(self, statistics=None):
-        self.statistics = statistics if statistics else Statistics()
+    def __init__(self, statistics=None, use_real_storage=False):
+        """
+        Initialize CostCalculator
+        """
+        if statistics:
+            self.statistics = statistics
+        else:
+            if STORAGE_ADAPTER_AVAILABLE and use_real_storage:
+                from ..integration_storage.storage_adapter import StorageAdapter
+                adapter = StorageAdapter(use_real_storage=True)
+                self.statistics = Statistics(storage_adapter=adapter)
+            else:
+                self.statistics = Statistics()
+        
+        self.use_real_storage = use_real_storage
         self._init_default_statistics()
 
     def _init_default_statistics(self):

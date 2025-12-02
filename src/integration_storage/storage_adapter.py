@@ -5,11 +5,11 @@ from classes.DataModels import Statistic
 verify_storage_manager()
 
 class StorageAdapter:
-    def __init__(self):
+    def __init__(self, use_real_storage=True):
         """
         Adapter to storage_manager
         """
-        pass
+        self.use_real_storage = use_real_storage
         
     def get_table_statistics(self, table_name):
         stats = StorageEngine.get_stats(table_name)
