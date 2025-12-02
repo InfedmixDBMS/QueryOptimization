@@ -144,10 +144,23 @@ class Parser:
                     tables.append((table_name, None))
                     i += 1
             
+            # Create table nodes
             table_nodes = []
             for table_name, alias in tables:
-                table_nodes.append(QueryTree(NodeType.TABLE.value, table_name,
-                                            [], None))
+                node = QueryTree(NodeType.TABLE.value, table_name, [], None)
+                node.alias = alias
+                table_nodes.append(node)
+            
+            # If multiple tables, create cross joins (Cartesian product)
+            if len(table_nodes) > 1:
+                current_node = table_nodes[0]
+                for i in range(1, len(table_nodes)):
+                    # Create a cross join (JOIN without condition)
+                    join_node = QueryTree(NodeType.JOIN.value, None, [], None)
+                    join_node.add_child(current_node)
+                    join_node.add_child(table_nodes[i])
+                    current_node = join_node
+                table_nodes = [current_node]
         else:
             # Handle JOINs
             table_nodes = []
