@@ -183,7 +183,7 @@ class PlanOptimizer:
             population.sort(key=lambda x: x[1])
 
             best_fitness = population[0][1]
-            avg_fitness = sum(f for _, f in population) / len(population)
+            avg_fitness = sum(f for _, f, _ in population) / len(population)
 
             best_scores.append(best_fitness)
             avg_scores.append(avg_fitness)
