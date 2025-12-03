@@ -8,12 +8,13 @@ from .plan_optimizer import PlanOptimizer
 from .cost_calculator import CostCalculator
 
 class OptimizationEngine:
-    def __init__(self):
+    def __init__(self, use_real_storage=False):
         """Initialize the optimization engine"""
         self.parser = Parser()
         self.validator = QueryValidator()
-        self.plan_optimizer = PlanOptimizer()
-        self.cost_calculator = CostCalculator()
+        self.plan_optimizer = PlanOptimizer(use_real_storage=use_real_storage)
+        self.cost_calculator = CostCalculator(use_real_storage=use_real_storage)
+        self.use_real_storage = use_real_storage
 
     def parse_query(self, query: str):
         """Parse and validate SQL query string"""

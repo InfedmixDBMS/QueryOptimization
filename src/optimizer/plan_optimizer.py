@@ -10,10 +10,11 @@ import random
 import time
 
 class PlanOptimizer:
-    def __init__(self):
+    def __init__(self, use_real_storage=False):
         """Initialize plan optimizer with optimization rules"""
         self.rules = OptimizationRules()
-        self.cost_calculator = CostCalculator()
+        self.cost_calculator = CostCalculator(use_real_storage=use_real_storage)
+        self.use_real_storage = use_real_storage
     
     def optimize_tree(self, parsed_query):
         """
