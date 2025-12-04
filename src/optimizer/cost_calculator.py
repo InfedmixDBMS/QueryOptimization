@@ -158,20 +158,25 @@ class CostCalculator:
         condition = tree.val
         selectivity = self._estimate_selectivity(condition, tree)
 
+        scan_cost = child_cost * 0.25
         output_cost = child_cost * selectivity
-        # print(f"    [SELECT DEBUG] Child cost: {child_cost:.2f}, Selectivity: {selectivity:.4f}, Output: {output_cost:.2f}")
 
-        return output_cost
+        return scan_cost + output_cost
 
     def _calculate_project_cost(self, tree):
         if not tree.childs:
             return 0
 
         child_cost = self._calculate_tree_cost(tree.childs[0])
-        projection_overhead = child_cost * 0.1
-        # print(f"    [PROJECT DEBUG] Child cost: {child_cost:.2f}, Overhead: {projection_overhead:.2f}, Total: {child_cost + projection_overhead:.2f}")
 
-        return child_cost + projection_overhead
+        if isinstance(tree.val, str):
+            num_attrs = len([a.strip() for a in tree.val.split(',')])
+        else:
+            num_attrs = 1
+
+        reduction_factor = max(0.85, 1.0 - (num_attrs * 0.04))
+
+        return child_cost * reduction_factor
 
     def _calculate_join_cost(self, tree):
         if len(tree.childs) < 2:
@@ -179,15 +184,11 @@ class CostCalculator:
 
         left_cost = self._calculate_tree_cost(tree.childs[0])
         right_cost = self._calculate_tree_cost(tree.childs[1])
-        
-        # DEBUGGING
-        # print(f"    [JOIN DEBUG] Left cost: {left_cost:.2f}, Right cost: {right_cost:.2f}")
 
         nested_loop_cost = left_cost * right_cost
-        join_overhead = (left_cost + right_cost) * 0.5
-        
+        join_overhead = (left_cost + right_cost) * 0.3
+
         total = nested_loop_cost + join_overhead
-        # print(f"    [JOIN DEBUG] Nested loop: {nested_loop_cost:.2f}, Total: {total:.2f}")
 
         return total
 
@@ -199,7 +200,7 @@ class CostCalculator:
         right_cost = self._calculate_tree_cost(tree.childs[1])
 
         merge_join_cost = left_cost + right_cost
-        join_overhead = (left_cost + right_cost) * 0.3
+        join_overhead = (left_cost + right_cost) * 0.1
 
         return merge_join_cost + join_overhead
 
@@ -212,7 +213,7 @@ class CostCalculator:
 
         hash_build_cost = left_cost
         hash_probe_cost = right_cost
-        hash_overhead = (left_cost + right_cost) * 0.2
+        hash_overhead = (left_cost + right_cost) * 0.1
 
         return hash_build_cost + hash_probe_cost + hash_overhead
 
