@@ -29,13 +29,17 @@ class OptimizationEngine:
         return parsed_query
 
     def optimize_query(self, parsed_query):
-        """Optimize parsed query using rules"""
-        return self.plan_optimizer.optimize_tree(parsed_query)
+        """Optimize parsed query using rules (genetic algorithm)"""
+        population_size=10 
+        iterations=20 
+        mutation_rate=0.3
+        
+        # NORMAL PLAN
+        # return self.plan_optimizer.optimize_tree(parsed_query) 
 
-    def optimize_query_with_genetic_algorithm(self, parsed_query, population_size=10, iterations=20, mutation_rate=0.3):
-        """Optimize parsed query using genetic algorithm"""
-        return self.plan_optimizer.optimize_tree_with_genetic_algorithm(parsed_query, population_size=population_size, iterations=iterations, mutation_rate=mutation_rate
-        )
+        # GENETIC ALGORITHM PLAN
+        return self.plan_optimizer.optimize_tree_with_genetic_algorithm(parsed_query, population_size=population_size, iterations=iterations, mutation_rate=mutation_rate)
+
 
     def get_cost(self, parsed_query):
         """Calculate execution cost"""
