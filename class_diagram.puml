@@ -1,6 +1,6 @@
 @startuml Query Optimizer Class Diagram
 
-title Query Optimizer - Class Diagram (Updated Implementation)
+title Query Optimizer - Class Diagram 
 
 
 ' Komponen utama interface
@@ -10,10 +10,11 @@ package "Query Optimizer" {
         - validator: QueryValidator
         - plan_optimizer: PlanOptimizer
         - cost_calculator: CostCalculator
-        + __init__(): void
+        - use_real_storage: bool
+        + __init__(use_real_storage: bool = False): void
         + parse_query(query: str): ParsedQuery
-        + optimize_query(query: ParsedQuery): ParsedQuery
-        + get_cost(query: ParsedQuery): int
+        + optimize_query(parsed_query: ParsedQuery): ParsedQuery
+        + get_cost(parsed_query: ParsedQuery): int
     }
 }
 
@@ -32,8 +33,8 @@ package "Komponen Tree" {
         - type: str
         - val: Any
         - childs: List[QueryTree]
-        - parent: QueryTree
-        + __init__(type: str, val: Any, childs: List[QueryTree] = [], parent: QueryTree = None): void
+        - parent: Optional[QueryTree]
+        + __init__(type: str, val: Any, childs: List[QueryTree], parent: Optional[QueryTree]): void
         + add_child(child: QueryTree): void
         + print_tree(level: int = 0): void
         + condition_node_to_string(node: ConditionNode): str
@@ -106,22 +107,60 @@ package "Komponen Optimisasi" {
     class PlanOptimizer {
         - rules: OptimizationRules
         - cost_calculator: CostCalculator
-        + __init__(): void
+        - use_real_storage: bool
+        + __init__(use_real_storage: bool = False): void
         + optimize_tree(parsed_query: ParsedQuery): ParsedQuery
+        + optimize_tree_with_genetic_algorithm(parsed_query: ParsedQuery, population_size: int = 10, iterations: int = 20, mutation_rate: float = 0.3): ParsedQuery
+        ' Traditional Plan Generators (6 strategies)
         - _generate_selection_first_plan(tree: QueryTree): QueryTree
         - _generate_projection_first_plan(tree: QueryTree): QueryTree
         - _generate_balanced_plan(tree: QueryTree): QueryTree
         - _generate_aggressive_combination_plan(tree: QueryTree): QueryTree
         - _generate_conservative_plan(tree: QueryTree): QueryTree
+        - _generate_swap_optimized_plan(tree: QueryTree): QueryTree
+        ' Genetic Algorithm Methods
+        - _initialize_population(original_tree: QueryTree, population_size: int): List[Tuple]
+        - _generate_random_rule_sequence(all_rules: List[int]): List[int]
+        - _apply_rule_sequence(tree: QueryTree, rule_sequence: List[int]): QueryTree
+        - _rule_name(rule_id: int): str
+        - _selection(population: List[Tuple], tournament_size: int = 3): Tuple
+        - _crossover(seq1: List[int], seq2: List[int]): Tuple[List[int], List[int]]
+        - _mutate(rule_sequence: List[int]): List[int]
+        - _remove_duplicates_preserve_order(seq: List[int]): List[int]
     }
 
     class CostCalculator {
         - statistics: Statistics
-        + __init__(statistics: Statistics = None): void
-        - _init_default_statistics(): void
+        - use_real_storage: bool
+        + __init__(statistics: Statistics = None, use_real_storage: bool = False): void
         + get_cost(parsed_query: ParsedQuery): int
-        + calculate_node_cost(node: QueryTree): int
         - _calculate_tree_cost(tree: QueryTree): int
+        + calculate_node_cost(node: QueryTree): int
+        ' Cost calculation methods for different operations
+        - _calculate_table_cost(tree: QueryTree): int
+        - _calculate_select_cost(tree: QueryTree): int
+        - _calculate_project_cost(tree: QueryTree): int
+        - _calculate_join_cost(tree: QueryTree): int
+        - _calculate_natural_join_cost(tree: QueryTree): int
+        - _calculate_hash_join_cost(tree: QueryTree): int
+        - _calculate_cartesian_product_cost(tree: QueryTree): int
+        - _calculate_order_by_cost(tree: QueryTree): int
+        - _calculate_update_cost(tree: QueryTree): int
+        - _calculate_limit_cost(tree: QueryTree): int
+        - _estimate_selectivity(condition: Any, tree: QueryTree): float
+        - _estimate_condition_selectivity(condition_node: ConditionNode, tree: QueryTree): float
+    }
+
+    class Statistics {
+        - storage_adapter: StorageAdapter
+        - cache: Dict[str, Dict]
+        - relations: Dict[str, Dict]
+        + __init__(storage_adapter: StorageAdapter = None): void
+        + add_relation(relation_name: str, nr: int, lr: int, br: int = None, fr: int = None): void
+        + add_distinct_values(relation_name: str, attribute: str, count: int): void
+        + get_relation_stats(relation_name: str): Dict
+        + get_distinct_values(relation_name: str, attribute: str): int
+        + clear_cache(): void
     }
 
     class OptimizationRules {
@@ -134,7 +173,6 @@ package "Komponen Optimisasi" {
         + {static} reorder_joins(tree: QueryTree): QueryTree
         + {static} apply_associativity(tree: QueryTree): QueryTree
         + {static} distribute_selection_over_join(tree: QueryTree): QueryTree
-        + {static} distribute_projection_over_join(tree: QueryTree): QueryTree
         ' Helper methods
         - {static} _helper_distribute_projection_over_join(tree: QueryTree): QueryTree
         - {static} _attribute_belongs_to(attr: str, table_attrs: List[str]): bool
@@ -145,15 +183,14 @@ package "Komponen Optimisasi" {
     }
 }
 
-' Interface statistik untuk Storage Manager
+' Interface Storage Manager
 package "Interface Storage" {
-    class Statistics {
-        - relations: Dict[str, Dict]
-        + __init__(): void
-        + add_relation(relation_name: str, nr: int, lr: int, br: int = None, fr: int = None): void
-        + add_distinct_values(relation_name: str, attribute: str, count: int): void
-        + get_relation_stats(relation_name: str): Dict
-        + get_distinct_values(relation_name: str, attribute: str): int
+    class StorageAdapter {
+        - use_real_storage: bool
+        + __init__(use_real_storage: bool = True): void
+        + get_table_statistics(table_name: str): Dict
+        + update_statistics(table_name: str): void
+        + is_available: bool
     }
 }
 
@@ -193,112 +230,11 @@ PlanOptimizer ..> QueryTree : memanipulasi
 OptimizationRules ..> QueryTree : transformasi
 
 ' CostCalculator dan statistik
-CostCalculator o-- Statistics : dapat memiliki
+CostCalculator *-- Statistics : memiliki
 CostCalculator ..> ParsedQuery : menganalisis
 CostCalculator ..> QueryTree : menghitung
 
-
-' note right of OptimizationEngine
-'     Interface utama untuk komponen Query Optimizer.
-'     Mengintegrasikan seluruh komponen dalam alur:
-'     Parse → Validate → Optimize → Calculate Cost
-
-'     Method dari spesifikasi:
-'     1. parse_query - parsing & validasi SQL
-'     2. optimize_query - optimasi menggunakan rules
-'     3. get_cost - kalkulasi biaya eksekusi
-' end note
-
-' note bottom of QueryValidator
-'     Komponen validasi yang ditambahkan untuk memastikan:
-'     - Query tree memiliki struktur yang valid
-'     - Tidak ada cycle dalam tree
-'     - Semua komponen esensial tersedia
-'     - Setiap node memiliki tipe yang benar
-
-'     Memberikan early detection sebelum optimisasi.
-' end note
-
-' note right of OptimizationRules
-'     Mengimplementasikan 8 aturan transformasi
-'     berdasarkan aturan ekivalensi relasional:
-
-'     1. Conjunctive Selection Decomposition (push_down_selection)
-'     2. Selection Commutativity (swap_selection)
-'     3. Projection Cascade Elimination (push_down_projection)
-'     4. Combine Cartesian with selection (→ join)
-'     5. Join Commutativity (reorder_joins)
-'     6. Join Associativity (apply_associativity)
-'     7. Distribute selection over join
-'     8. Distribute projection over join
-
-'     Helper Methods:
-'     • _helper_distribute_projection_over_join
-'     • _attribute_belongs_to
-'     • _decompose_conjunctive_selection
-'     • _extract_and_conditions
-'     • _get_attributes_from_tree
-'     • _get_attributes_from_condition
-
-'     Status: 6/8 rules implemented (75%)
-' end note
-
-' note left of PlanOptimizer
-'     Orchestrator yang menerapkan aturan optimisasi
-'     dengan strategi multiple plan selection:
-
-'     Multiple Plan Generation:
-'     1. Selection-First Plan (Standard Heuristic)
-'     2. Projection-First Plan
-'     3. Balanced Plan (Alternating)
-'     4. Aggressive Combination Plan
-'     5. Conservative Plan (Minimal)
-
-'     Setiap plan dievaluasi cost-nya,
-'     dan plan dengan cost terendah dipilih.
-
-'     Mengembalikan ParsedQuery yang telah dioptimasi
-'     dengan logging untuk setiap tahap transformasi.
-' end note
-
-' note bottom of Statistics
-'     Mengelola statistik relasi untuk perhitungan biaya:
-'     - nr: jumlah tuple dalam relasi r
-'     - br: jumlah blok yang berisi tuple dari r
-'     - lr: ukuran tuple dari r
-'     - fr: blocking factor dari r
-'     - V(A,r): nilai distinct dalam r untuk atribut A
-
-'     Menyediakan default values untuk relasi tanpa statistik
-'     dan dapat menghitung parameter yang hilang secara otomatis.
-    
-'     Parameter br dan fr bersifat optional dengan auto-calculation.
-' end note
-
-' note left of QueryTree
-'     Representasi tree dari parsed query.
-'     Setiap node memiliki tipe (NodeType) dan nilai.
-'     Mendukung operasi seperti PROJECT, SELECT,
-'     JOIN, TABLE, ORDER_BY, GROUP_BY, HAVING, dll.
-
-'     Tree structure dengan parent-child relationship
-'     memungkinkan traversal dan transformasi.
-    
-'     Default parameters: childs=[], parent=None
-' end note
-
-' note bottom of CostCalculator
-'     Menghitung estimasi biaya eksekusi query
-'     menggunakan pendekatan rekursif bottom-up.
-
-'     Formula biaya untuk berbagai operasi:
-'     - TABLE: br (number of blocks)
-'     - SELECT: scan cost + evaluation cost
-'     - JOIN: nested loop / hash / merge join
-'     - PROJECT: child cost + projection cost
-
-'     Menggunakan statistik dari Statistics class.
-'     Auto-initialize default statistics jika tidak disediakan.
-' end note
+' Statistics dan StorageAdapter
+Statistics o-- StorageAdapter : dapat memiliki
 
 @enduml
